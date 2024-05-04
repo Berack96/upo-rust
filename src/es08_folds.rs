@@ -28,16 +28,16 @@ pub struct NumVocali {
     u: i32,
 }
 impl NumVocali {
-    pub fn new(a:i32, e:i32, i:i32, o:i32, u:i32) -> Self {
-        Self {a, e, i, o, u}
+    pub fn new(a: i32, e: i32, i: i32, o: i32, u: i32) -> Self {
+        Self { a, e, i, o, u }
     }
 }
 
 #[derive(Debug, PartialEq, Default)]
 pub struct TuplaVocali(i32, i32, i32, i32, i32);
 impl TuplaVocali {
-    pub fn new(a:i32, e:i32, i:i32, o:i32, u:i32) -> Self {
-        Self (a, e, i, o, u)
+    pub fn new(a: i32, e: i32, i: i32, o: i32, u: i32) -> Self {
+        Self(a, e, i, o, u)
     }
 }
 

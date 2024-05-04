@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 
-use std::{fmt::Debug, rc::Rc};
-
 use self::states::AccountState;
+use std::{fmt::Debug, rc::Rc};
 
 /**
  * Dovete implementare un ContoBancario che ha come informazioni

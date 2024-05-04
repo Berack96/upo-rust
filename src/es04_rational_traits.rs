@@ -1,9 +1,8 @@
 #![allow(dead_code)]
 
+use super::es02_rational::Rational;
 use std::ops::Add;
 use std::ops::Mul;
-
-use super::es02_rational::Rational;
 
 /** Es.4
  * Per la struttura dei numeri razionali implementare i traits Add e Mul sia per fare

@@ -7,4 +7,3 @@ pub mod es06_list;
 pub mod es07_list_generic;
 pub mod es08_folds;
 pub mod es09_auction;
-

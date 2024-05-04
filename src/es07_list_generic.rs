@@ -160,7 +160,6 @@ impl<T> LinkedList<T> {
         None
     }
 
-
     pub fn get(&mut self, n: i32) -> Option<T> {
         if self.size == 0 {
             return None;
