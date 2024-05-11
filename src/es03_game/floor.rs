@@ -1,12 +1,28 @@
+use super::{
+    cell::Cell,
+    entities::{Entity, Position},
+};
 use rand_pcg::Pcg32;
 use serde::{Deserialize, Serialize};
+use std::{
+    cell::{RefCell, RefMut},
+    rc::Rc,
+};
 
-use super::cell::Cell;
-use super::entities::Entity;
-use super::game::Rogue;
-use super::generator::Generator;
+#[derive(Clone, Deserialize, Serialize)]
+pub struct FloorPtr(Rc<RefCell<Floor>>);
+impl FloorPtr {
+    pub fn new(level: usize, rng: Pcg32, entities: Vec<Entity>, grid: Vec<Vec<Cell>>) -> Self {
+        Self(Rc::new(RefCell::new(Floor::new(
+            level, rng, entities, grid,
+        ))))
+    }
+    pub fn get(&mut self) -> RefMut<Floor> {
+        self.0.borrow_mut()
+    }
+}
 
-#[derive(Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Floor {
     level: usize,
     grid: Vec<Vec<Cell>>,
@@ -15,28 +31,43 @@ pub struct Floor {
 }
 
 impl Floor {
-    pub fn new(generator: Generator) -> Self {
+    fn new(level: usize, rng: Pcg32, entities: Vec<Entity>, grid: Vec<Vec<Cell>>) -> Self {
         Self {
-            entities: vec![],
-            level: generator.level,
-            grid: generator.build_empty_matrix(),
-            rng: generator.rng,
+            level,
+            grid,
+            entities,
+            rng,
         }
+    }
+
+    pub fn get_level(&self) -> usize {
+        self.level
     }
     pub fn get_rng(&mut self) -> &mut Pcg32 {
         &mut self.rng
     }
-    pub fn get_level(&self) -> usize {
-        self.level
+    pub fn get_cell(&mut self, pos: Position) -> &mut Cell {
+        &mut self.grid[pos.0][pos.1]
     }
-    pub fn get_cell(&self, pos: (usize, usize)) -> Cell {
-        self.grid[pos.0][pos.1]
+    pub fn get_entrance(&mut self) -> Position {
+        self.grid
+            .iter()
+            .enumerate()
+            .find_map(|(x, vec)| {
+                vec.iter().enumerate().find_map(|(y, cell)| {
+                    if let Cell::Entance = cell {
+                        Some(Position(x, y))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .expect("Entrance of the floor should be inside the grid!")
     }
 
-    pub fn compute_entities(&mut self, game: &mut Rogue) {
+    pub fn update_entities(&mut self) {
         for entity in &mut self.entities {
-            entity.compute_effects(game);
-            entity.do_action(game, game.input_action(entity));
+            entity.update();
         }
     }
 }

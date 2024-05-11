@@ -1,52 +1,93 @@
+use super::entities::{Action, Direction, Entity};
+use dyn_clone::{clone_trait_object, DynClone};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use super::{entities::{Direction, Entity}, game::Rogue};
-
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub enum Cell {
-    Staricase,
-    Special(Effect),
+    Entance,
+    Exit,
+    Special(Box<dyn Effect>),
     Wall,
     Empty,
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
-pub enum Effect {
-    InstantDamage(i8),
-    TurnBasedDamage(u8, i8),
-    //DeBuff(i8, i8),
-    Confusion(u8),
-    //Custom(i16),
-}
-
-const DELTA: i32 = 5;
-impl Effect {
-    pub fn effect(&self, game: &mut Rogue, entity: &mut Entity) {
-        let floor = game.current_floor();
-        let rng = floor.get_rng();
-
-        match *self {
-            Effect::InstantDamage(damage) => {
-                let damage = damage as i32;
-                let damage = damage + rng.gen_range(-DELTA..DELTA);
-                entity.health += damage;
-            }
-            Effect::Confusion(time) => {
-                if time > 0 {
-                    entity.add_effect(Effect::Confusion(time - 1));
-                    let coin_flip = rng.gen_range(0..=1);
-                    if coin_flip == 1 {
-                        let random_direction = Direction::generate_random(rng);
-                        entity.direction = random_direction;
-                    }
+impl Cell {
+    pub fn entity_over(&mut self, entity: &mut Entity) {
+        match self {
+            Cell::Special(effect) => {
+                entity.add_effect(effect.clone());
+                if !effect.is_persistent() {
+                    *self = Cell::Empty
                 }
             }
-            _ => todo!()
+            Cell::Wall => {
+                entity.direction.invert();
+                entity.position = entity.direction.move_from(entity.position);
+            }
+            _ => (),
         }
     }
 }
 
-pub const POISON: Effect = Effect::InstantDamage(20);
-pub const FOOD: Effect = Effect::InstantDamage(-20);
-pub const CONFUSION: Effect = Effect::Confusion(u8::MAX);
+#[typetag::serde(tag = "type")]
+pub trait Effect: DynClone {
+    fn is_persistent(&self) -> bool;
+    fn apply_to(&self, entity: &mut Entity);
+}
+clone_trait_object!(Effect);
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct InstantDamage(pub i32);
+#[typetag::serde]
+impl Effect for InstantDamage {
+    fn is_persistent(&self) -> bool {
+        false
+    }
+    fn apply_to(&self, entity: &mut Entity) {
+        entity.health += self.0;
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Confusion(pub u8);
+#[typetag::serde]
+impl Effect for Confusion {
+    fn is_persistent(&self) -> bool {
+        true
+    }
+    fn apply_to(&self, entity: &mut Entity) {
+        if self.0 > 0 {
+            let mut floor = entity.get_floor();
+            let mut floor = floor.get();
+            let rng = floor.get_rng();
+            let coin_flip = rng.gen_range(0..=1);
+            if coin_flip == 1 {
+                let random_direction = Direction::random(rng);
+                entity.buffer = Action::Move(random_direction);
+            }
+            entity.add_effect(Box::new(Self(self.0 - 1)));
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct TurnBasedDamage {
+    time: u8,
+    damage: i32,
+}
+#[typetag::serde]
+impl Effect for TurnBasedDamage {
+    fn is_persistent(&self) -> bool {
+        false
+    }
+    fn apply_to(&self, entity: &mut Entity) {
+        if self.time > 0 {
+            entity.health += self.damage;
+            entity.add_effect(Box::new(Self {
+                time: self.time - 1,
+                damage: self.damage,
+            }));
+        }
+    }
+}

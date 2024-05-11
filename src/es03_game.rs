@@ -1,4 +1,3 @@
-#![allow(unused)]
 
 /** Es.3
  * Implementare una libreria che permetta di realizzare il seguente gioco.
@@ -40,3 +39,11 @@ pub mod generator;
 pub mod cell;
 pub mod config;
 pub mod entities;
+
+pub fn start_game() {
+    let mut game = game::Rogue::new();
+    loop {
+        println!("{}", game);
+        game.compute_turn();
+    }
+}
