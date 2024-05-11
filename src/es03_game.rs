@@ -39,11 +39,3 @@ pub mod generator;
 pub mod cell;
 pub mod config;
 pub mod entities;
-
-pub fn start_game() {
-    let mut game = game::Rogue::new();
-    loop {
-        println!("{}", game);
-        game.compute_turn();
-    }
-}
