@@ -1,6 +1,6 @@
 use super::{
     cell::{Confusion, Effect, InstantDamage},
-    entities::Decider,
+    entities::Behavior,
 };
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
@@ -52,7 +52,7 @@ pub struct ConfigPlayer {
 pub struct ConfigEntity {
     pub floors: Range<usize>,
     pub name: String,
-    pub decider: Box<dyn Decider>,
+    pub decider: Box<dyn Behavior>,
     pub health: i32,
     pub attack: i32,
     pub priority: usize,

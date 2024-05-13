@@ -1,20 +1,23 @@
-use super::{cell::Effect, floor::FloorPtr};
+use super::{
+    cell::Effect,
+    floor::{FloorPtr, FloorView},
+};
 use dyn_clone::{clone_trait_object, DynClone};
 use rand::Rng;
 use rand_pcg::Pcg32;
 use serde::{Deserialize, Serialize};
-use std::{collections::VecDeque, fmt::Display, mem};
+use std::{collections::VecDeque, fmt::Display, io::Write, mem};
 
 /// Tupla nominata Position in modo che nel codice sia più chiaro a cosa serve.\
 /// È molto più facile capire a colpo d'occhio Position rispetto a (usize, usize)\
 /// I due valori sono la posizione sull'asse X e sull'asse Y\
 /// Il punto (0,0) si trova in basso a sinista.
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(PartialEq, Eq, Clone, Copy, Deserialize, Serialize)]
 pub struct Position(pub usize, pub usize);
 
 /// Indica la direzione dove una entità sta guardando.\
 /// È possibile anche non guardare in nessuna direzione tramite None.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(PartialEq, Eq, Clone, Copy, Deserialize, Serialize)]
 pub enum Direction {
     Up,
     Down,
@@ -60,19 +63,22 @@ impl Direction {
             _ => Direction::None,
         }
     }
-}
-
-impl Display for Direction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let c = match self {
+    /// Restituisce la rappresentazione della direzione in formato char, in questo modo
+    /// può essere utilizzata per vedere il valore e mostrarlo a terminale.
+    pub fn as_char(&self) -> char {
+        match self {
             Self::Up => '▲',
             Self::Down => '▼',
             Self::Left => '◄',
             Self::Right => '►',
             Self::None => '■',
-        };
+        }
+    }
+}
 
-        write!(f, "{}", c)
+impl Display for Direction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_char())
     }
 }
 
@@ -81,7 +87,7 @@ impl Display for Direction {
 pub struct Entity {
     name: String,
     effects: VecDeque<Box<dyn Effect>>,
-    decider: Box<dyn Decider>,
+    behavior: Box<dyn Behavior>,
     floor: FloorPtr,
     pub buffer: Action,
     pub position: Position,
@@ -100,14 +106,14 @@ impl Entity {
         name: String,
         health: i32,
         attack: i32,
-        decider: Box<dyn Decider>,
+        behavior: Box<dyn Behavior>,
         mut floor: FloorPtr,
     ) -> Self {
         let position = floor.get().get_entrance();
         Self {
             name,
             floor,
-            decider,
+            behavior,
             position,
             attack,
             health,
@@ -177,6 +183,14 @@ impl Entity {
         false
     }
 
+    /// Permette all'entità di mostrare il piano in cui si trova e di fare una mossa.\
+    /// Ha la stessa funzionalità di update() ma prima mostra il piano dell'entità.\
+    /// Il piano viene mostrato tramite il behavior dell'entità.
+    pub fn update_display(&mut self, floor: FloorView) -> bool {
+        self.behavior.update(floor);
+        self.update()
+    }
+
     /// calcola gli effetti e li applica all'entità.
     fn compute_effects(&mut self) {
         let total = self.effects.len(); // len could change
@@ -189,7 +203,7 @@ impl Entity {
     /// prende una decisione e applica l'azione da fare
     /// L'azione compiuta viene restituita, altrimenti None
     fn compute_action(&mut self) -> Option<Action> {
-        let action = self.decider.get_next_action()?;
+        let action = self.behavior.get_next_action()?;
         let action = match self.buffer {
             Action::DoNothing => action,
             _ => mem::replace(&mut self.buffer, Action::DoNothing),
@@ -199,20 +213,22 @@ impl Entity {
         action.apply(self);
         result
     }
+}
 
-    /// Metodo statico per l'update e l'eventuale eliminazione di entità da un vettore.
-    /// Le entità rimosse sono quelle che non riescono a fare l'update o che eventualmente
-    /// non sono più in vita
-    pub fn update_from_vec(entities: &mut Vec<Entity>) {
-        let to_remove: Vec<usize> = entities
-            .iter_mut()
-            .enumerate()
-            .filter_map(|(i, entity)| if entity.update() { Some(i) } else { None })
-            .rev()
-            .collect();
-        to_remove.iter().for_each(|i| {
-            entities.remove(*i);
-        });
+impl Display for Entity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let times = 20;
+        let health_bar = (self.health * times) / self.health_max;
+
+        let filled = "█".repeat(health_bar as usize);
+        let empty = " ".repeat((times - health_bar) as usize);
+        let health_bar = format!("[{}{}]", filled, empty);
+
+        write!(
+            f,
+            "{}: {} {}{:4}/{:4}",
+            self.name, self.direction, health_bar, self.health, self.health_max
+        )
     }
 }
 
@@ -255,17 +271,22 @@ impl Action {
 /// \
 /// Il trait è taggato con typetag in modo che possa essere utilizzato
 /// nella serializzazione e deserializzazione di serde.
-/// Esso permette di trasformare le implementazioni di Decider in una
+/// Esso permette di trasformare le implementazioni di questo trait in una
 /// spiecie di Enum senza il bisogno di farlo manualmente.\
 /// Quello che viene richiesto è che, nell'implementazione di una
-/// struttura concreta di questo trait, venga messo sopra impl X for Decider:\
+/// struttura concreta di questo trait, venga messo sopra impl X for Behavior:\
 /// #\[typetag::serde\]\
 /// \
 /// In questo modo si possono creare molteplici comoprtamenti che implementano
 /// questo trait senza il bisogno di avere un Enum con essi
 #[typetag::serde(tag = "type")]
-pub trait Decider: DynClone {
-    /// Genera una azione che poi verrà usata per l'entità associata a questo Decider.\
+pub trait Behavior: DynClone {
+    /// In questo metodo viene passata una struttura che contiene una rappresentazione del
+    /// piano semplice, avente solo delle informazioni parziali.\
+    /// Questo serve a mostrare eventualmente delle possibili informazioni all'utente
+    /// o di registrare dei valori per l'algoritmo di generazione delle azioni.
+    fn update(&self, floor: FloorView);
+    /// Genera una azione che poi verrà usata per l'entità associata.\
     /// L'azione può essere generata in qualunque modo: casuale, sempre la stessa,
     /// tramite interazione con console, o tramite una connessione ad un client.\
     /// \
@@ -274,15 +295,45 @@ pub trait Decider: DynClone {
     /// ma anche una possibilità che alcune entità rare possano sparire.
     fn get_next_action(&self) -> Option<Action>;
 }
-clone_trait_object!(Decider);
+clone_trait_object!(Behavior);
 
 /// Semplice implementazione di un possibile comportamento di una entità.\
 /// In questo caso l'entità resterà immobile nel punto in cui si trova per sempre.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Immovable;
 #[typetag::serde]
-impl Decider for Immovable {
+impl Behavior for Immovable {
+    fn update(&self, _floor: FloorView) {}
     fn get_next_action(&self) -> Option<Action> {
         Some(Action::DoNothing)
+    }
+}
+
+/// Semplice implementazione di una possibile interfaccia console.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ConsoleInput;
+#[typetag::serde]
+impl Behavior for ConsoleInput {
+    fn update(&self, floor: FloorView) {
+        let mut term = console::Term::stdout();
+        let _ = term.clear_screen();
+        let _ = term.write_fmt(format_args!("{}\n", floor));
+    }
+    fn get_next_action(&self) -> Option<Action> {
+        let mut term = console::Term::stdout();
+        let _ = term.write("Insert your action [wasd or enter for nothing]: ".as_bytes());
+
+        loop {
+            if let Ok(ch) = term.read_char() {
+                match ch {
+                    '\n' => return Some(Action::DoNothing),
+                    'w' => return Some(Action::Move(Direction::Up)),
+                    'a' => return Some(Action::Move(Direction::Left)),
+                    's' => return Some(Action::Move(Direction::Down)),
+                    'd' => return Some(Action::Move(Direction::Right)),
+                    _ => (),
+                }
+            }
+        }
     }
 }

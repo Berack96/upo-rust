@@ -37,13 +37,9 @@ impl Generator {
             size: floor_size,
             size_rooms: config.room_size.clone(),
             effects_total: config.effects_total,
-            effects: Self::vec_filter(&config.effects, |val| {
-                val.floors.contains(&floor_level)
-            }),
+            effects: Self::vec_filter(&config.effects, |val| val.floors.contains(&floor_level)),
             entities_total: config.entities_total,
-            entities: Self::vec_filter(&config.entities, |val| {
-                val.floors.contains(&floor_level)
-            }),
+            entities: Self::vec_filter(&config.entities, |val| val.floors.contains(&floor_level)),
             grid: Self::grid_with_only(floor_size, Cell::Wall),
         }
     }
@@ -122,7 +118,7 @@ impl Generator {
         original
             .clone()
             .into_iter()
-            .filter_map(|val| if filter(&val) { Some(val) } else { None })
+            .filter_map(|val| filter(&val).then(|| val))
             .collect()
     }
     /// crea un campo con solamente la cella specificata clonata su tutto di esso

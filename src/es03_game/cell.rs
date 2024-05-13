@@ -2,6 +2,7 @@ use super::entities::{Action, Direction, Entity};
 use dyn_clone::{clone_trait_object, DynClone};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 
 /// Rappresentazione di una cella di spazio.\
 /// Essa ha diversi valori in base a cosa si può fare o meno su di essa.
@@ -37,6 +38,23 @@ impl Cell {
             }
             _ => (),
         }
+    }
+    /// Restituisce la rappresentazione della cella in formato char, in questo modo
+    /// può essere utilizzata per vedere il valore e mostrarlo a terminale.
+    pub fn as_char(&self) -> char {
+        match self {
+            Cell::Entance => ' ',
+            Cell::Exit => '¤',
+            Cell::Special(_) => '§',
+            Cell::Wall => '█',
+            Cell::Empty => ' ',
+        }
+    }
+}
+
+impl Display for Cell {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_char())
     }
 }
 
