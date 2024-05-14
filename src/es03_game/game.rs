@@ -7,6 +7,10 @@ use super::{
 use rand::{RngCore, SeedableRng};
 use rand_pcg::Pcg32;
 use serde::{Deserialize, Serialize};
+use std::{
+    fs::File,
+    io::{self, BufReader, BufWriter},
+};
 
 /// Rappresenta un Dungeon in stile RogueLike.\
 /// In esso possiamo trovare dei piani generati casualmente
@@ -33,6 +37,25 @@ impl Dungeon {
         };
         game.build_next_floor();
         game
+    }
+
+    /// Carica il dungeon da un file.\
+    /// Il file deve essere formattato tramite json, altrimenti viene ritornato un errore.
+    pub fn load(filename: &str) -> io::Result<Self> {
+        let file = File::open(filename)?;
+        let reader = BufReader::new(file);
+        let dungeon: Self = serde_json::from_reader(reader)?;
+        Ok(dungeon)
+    }
+
+    /// Salva il dungeon corrente nel file indicato.\
+    /// Il salvataggio viene fatto tramite serializzazione JSON in modo che sia facile da vedere.\
+    /// Nel caso in cui ci siano problemi con I/O, viene ritornato un errore.
+    pub fn save(&mut self, filename: &str) -> io::Result<()> {
+        let file = File::create(filename)?;
+        let writer = BufWriter::new(file);
+        let _ = serde_json::to_writer_pretty(writer, self)?;
+        Ok(())
     }
 
     /// Aggiunge un giocatore al Dungeon, esso avrà le statistiche di base assegnate
