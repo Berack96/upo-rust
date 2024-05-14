@@ -4,36 +4,7 @@ use super::{
 };
 use rand_pcg::Pcg32;
 use serde::{Deserialize, Serialize};
-use std::{
-    cell::{RefCell, RefMut},
-    fmt::Display,
-    rc::Rc,
-};
-
-/// Tupla creata per poter implementare qualche metodo sulla struttura Rc<RefCell<Floor>>\
-/// In questo modo ho incapsulato i borrow e la creazione di questo oggetto per una
-/// migliore lettura del codice (hopefully).
-#[derive(Clone, Deserialize, Serialize)]
-pub struct FloorPtr(Rc<RefCell<Floor>>);
-impl FloorPtr {
-    /// Crea un nuovo puntatore al piano indicato.\
-    /// Il piano viene creato a partire dai parametri passati in input, che sono tutte cose
-    /// necessarie ad esso.
-    pub fn new(level: usize, rng: Pcg32, entities: Vec<Entity>, grid: Vec<Vec<Cell>>) -> Self {
-        Self(Rc::new(RefCell::new(Floor {
-            level,
-            rng,
-            players: vec![],
-            entities,
-            grid,
-        })))
-    }
-
-    /// Permette di prendere il valore puntato al piano.
-    pub fn get(&mut self) -> RefMut<Floor> {
-        self.0.borrow_mut()
-    }
-}
+use std::{collections::VecDeque, fmt::Display};
 
 /// Indica un piano del dungeon, in essa si possono trovare le celle in cui si
 /// cammina e le entità che abitano il piano.\
@@ -42,12 +13,36 @@ impl FloorPtr {
 pub struct Floor {
     level: usize,
     grid: Vec<Vec<Cell>>,
-    players: Vec<Entity>,
-    entities: Vec<Entity>,
+    players: VecDeque<Entity>,
+    entities: VecDeque<Entity>,
     rng: Pcg32,
 }
 
 impl Floor {
+    /// Crea un nuovo piano al livello indicato.\
+    /// Il piano viene creato a partire dai parametri passati in input, che sono tutte cose necessarie ad esso.
+    pub fn new(level: usize, rng: Pcg32, entities: Vec<Entity>, grid: Vec<Vec<Cell>>) -> Self {
+        Self {
+            level,
+            rng,
+            players: VecDeque::new(),
+            entities: VecDeque::from(entities),
+            grid,
+        }
+    }
+
+    /// Aggiunge un giocatore al piano e lo inserisce all'entrata.
+    pub fn add_player(&mut self, mut player: Entity) {
+        // todo!() check collision with other entities
+        player.position = self.get_entrance();
+        self.players.push_back(player);
+    }
+
+    /// Indica se il piano ha almeno un giocatore in vita o meno
+    pub fn has_players(&self) -> bool {
+        self.players.iter().any(|player| player.is_alive())
+    }
+
     /// Restituisce il livello di profondità del piano
     pub fn get_level(&self) -> usize {
         self.level
@@ -83,78 +78,66 @@ impl Floor {
             .expect("Entrance of the floor should be inside the grid!")
     }
 
+    /// Fa l'update di tutti i giocatori e rimuove eventualmente quelli non più in vita, restituendoli dentro un vec
+    pub fn update_players(&mut self) -> Vec<Entity> {
+        let mut remove = vec![];
+        for _ in 0..self.players.len() {
+            let mut player = self.players.pop_front().unwrap();
+            if player.update(self) {
+                self.players.push_back(player);
+            } else {
+                remove.push(player);
+            }
+        }
+        remove
+    }
+
     /// Fa l'update di tutte le entità e rimuove eventualmente quelle non più in vita
     pub fn update_entities(&mut self) {
-        let to_remove: Vec<bool> = self
-            .entities
-            .iter_mut()
-            .map(|entity| entity.update())
-            .collect();
-        let mut to_remove = to_remove.iter();
-        self.entities.retain(|_| *to_remove.next().unwrap());
+        for _ in 0..self.entities.len() {
+            let mut entity = self.entities.pop_front().unwrap();
+            if entity.update(self) {
+                self.entities.push_back(entity);
+            }
+        }
+    }
+
+    /// Crea una view del piano.\
+    pub fn get_limited_view_floor<'a>(&'a self, entity: &'a Entity) -> FloorView<'a> {
+        FloorView::new(self, entity)
     }
 }
 
 /// Struttura di mezzo tra un piano e il gioco vero e proprio.\
 /// Utilizzata per la comunicazione con le entità per poter aggiornare quello che vedono.\
 /// Infatti internamente ha solo alcuni pezzi del gioco per non far mostrare tutto.\
-pub struct FloorView {
-    pub level: usize,
-    pub entity: Entity,
-    pub players: Vec<Entity>,
-    pub entities: Vec<Entity>,
-    pub grid: Vec<Vec<Cell>>,
+pub struct FloorView<'a> {
+    pub entity: &'a Entity,
+    pub floor: &'a Floor,
 }
 
-impl FloorView {
-    /// Crea una vista del gioco corrente secondo la visione dell entità passata in intput.\
+impl<'a> FloorView<'a> {
+    /// Crea una vista del gioco corrente secondo la visione dell'entità passata in intput.\
     /// Il SimpleFloor risultante avrà il piano, entità, livello e giocatori che si trovano
     /// in questo momento sul piano dell'entità passata in input.
-    pub fn new(entity: &Entity) -> Self {
-        let mut floor = entity.get_floor();
-        let floor = floor.get();
-
-        let level = floor.level;
-        let grid = floor.grid.clone();
-        let entities: Vec<Entity> = floor
-            .entities
-            .iter()
-            .filter_map(|e| (e.position != entity.position).then_some(e.clone()))
-            .collect();
-        let players: Vec<Entity> = floor
-            .players
-            .iter()
-            .filter_map(|p| (p.position != entity.position).then_some(p.clone()))
-            .collect();
-
+    pub fn new(floor: &'a Floor, entity: &'a Entity) -> Self {
         Self {
-            level,
-            entity: entity.clone(),
-            players,
-            entities,
-            grid,
+            entity: &entity,
+            floor: &floor,
         }
     }
 
     /// Rappresentazione del piano come matrice di char
     pub fn as_char_grid(&self) -> Vec<Vec<char>> {
-        let size = self.grid.len();
+        let grid = &self.floor.grid;
+        let size = grid.len();
         let mut grid: Vec<Vec<char>> = (0..size)
             .map(|y| {
-                let row = (0..size).map(|x| Some(&self.grid[x][y]));
+                let row = (0..size).map(|x| Some(&grid[x][y]));
                 let mut row: Vec<_> = row
                     .clone()
                     .zip(row.skip(1).chain(std::iter::once(None)))
-                    .flat_map(|(a, b)| {
-                        let a = a.unwrap();
-                        if let Some(b) = b {
-                            let one_is_wall = matches!(b, Cell::Wall) || matches!(a, Cell::Wall);
-                            let c = if one_is_wall { Cell::Wall } else { Cell::Empty };
-                            vec![a.as_char(), c.as_char()]
-                        } else {
-                            vec![a.as_char()]
-                        }
-                    })
+                    .flat_map(Self::increase_x_dimension)
                     .collect();
                 row.push('\n');
                 row
@@ -165,18 +148,27 @@ impl FloorView {
         grid[pos.1][pos.0 * 2] = self.entity.direction.as_char();
         grid
     }
+
+    fn increase_x_dimension(tuple: (Option<&Cell>, Option<&Cell>)) -> Vec<char> {
+        let (a, b) = tuple;
+        let a = a.unwrap();
+        if let Some(b) = b {
+            let one_is_wall = matches!(b, Cell::Wall) || matches!(a, Cell::Wall);
+            let c = if one_is_wall { Cell::Wall } else { Cell::Empty };
+            vec![a.as_char(), c.as_char()]
+        } else {
+            vec![a.as_char()]
+        }
+    }
 }
 
-impl Display for FloorView {
+impl<'a> Display for FloorView<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let grid: String = self
             .as_char_grid()
             .iter()
             .rev()
-            .map(|row| {
-                let a: String = row.iter().collect();
-                a
-            })
+            .map(|row| row.iter().collect::<String>())
             .collect();
 
         write!(f, "{}\n{}", grid, self.entity)

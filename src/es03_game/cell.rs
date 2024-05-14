@@ -1,4 +1,4 @@
-use super::entities::{Action, Direction, Entity};
+use super::{entities::{Action, Direction, Entity}, floor::Floor};
 use dyn_clone::{clone_trait_object, DynClone};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -81,7 +81,7 @@ pub trait Effect: DynClone {
     /// elaborato come una trappola di nemici.\
     /// Tramite l'entità si può anche accedere al piano dove si trova per
     /// poter modificare eventualmente qualcosa.
-    fn apply_to(&self, entity: &mut Entity);
+    fn apply_to(&self, entity: &mut Entity, floor: &mut Floor);
 }
 clone_trait_object!(Effect);
 
@@ -96,7 +96,7 @@ impl Effect for InstantDamage {
     fn is_persistent(&self) -> bool {
         false
     }
-    fn apply_to(&self, entity: &mut Entity) {
+    fn apply_to(&self, entity: &mut Entity, _floor: &mut Floor) {
         entity.apply_damage(self.0);
     }
 }
@@ -112,10 +112,8 @@ impl Effect for Confusion {
     fn is_persistent(&self) -> bool {
         true
     }
-    fn apply_to(&self, entity: &mut Entity) {
+    fn apply_to(&self, entity: &mut Entity, floor: &mut Floor) {
         if self.0 > 0 {
-            let mut floor = entity.get_floor();
-            let mut floor = floor.get();
             let rng = floor.get_rng();
             let coin_flip = rng.gen_range(0..=1);
             if coin_flip == 1 {
@@ -141,7 +139,7 @@ impl Effect for TurnBasedDamage {
     fn is_persistent(&self) -> bool {
         false
     }
-    fn apply_to(&self, entity: &mut Entity) {
+    fn apply_to(&self, entity: &mut Entity, _floor: &mut Floor) {
         if self.time > 0 {
             entity.apply_damage(self.damage);
             entity.add_effect(Box::new(Self {

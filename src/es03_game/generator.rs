@@ -1,7 +1,7 @@
 use super::{
     cell::Cell,
     config::{Config, ConfigEffect, ConfigEntity},
-    floor::{Floor, FloorPtr},
+    floor::Floor,
 };
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg32;
@@ -46,7 +46,7 @@ impl Generator {
 
     /// Questo metodo è il più semplice per la generazione del piano.\
     /// Crea una enorme stanza con dei muri attorno e piazza tutti gli effetti.
-    pub fn build_floor(mut self) -> FloorPtr {
+    pub fn build_floor(mut self) -> Floor {
         for x in 1..(self.size - 1) {
             for y in 1..(self.size - 1) {
                 self.grid[x][y] = Cell::Empty;
@@ -55,7 +55,7 @@ impl Generator {
 
         self.rand_place_cell(Cell::Entance);
         self.rand_place_effects();
-        FloorPtr::new(self.level, self.rng, vec![], self.grid)
+        Floor::new(self.level, self.rng, vec![], self.grid)
     }
 
     /// TODO

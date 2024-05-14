@@ -1,6 +1,6 @@
 use super::{
     cell::Effect,
-    floor::{FloorPtr, FloorView},
+    floor::{Floor, FloorView},
 };
 use dyn_clone::{clone_trait_object, DynClone};
 use rand::Rng;
@@ -88,7 +88,6 @@ pub struct Entity {
     name: String,
     effects: VecDeque<Box<dyn Effect>>,
     behavior: Box<dyn Behavior>,
-    floor: FloorPtr,
     pub buffer: Action,
     pub position: Position,
     pub direction: Direction,
@@ -107,14 +106,11 @@ impl Entity {
         health: i32,
         attack: i32,
         behavior: Box<dyn Behavior>,
-        mut floor: FloorPtr,
     ) -> Self {
-        let position = floor.get().get_entrance();
         Self {
             name,
-            floor,
             behavior,
-            position,
+            position: Position(0, 0),
             attack,
             health,
             health_max: health,
@@ -158,51 +154,34 @@ impl Entity {
         };
     }
 
-    /// Restituisce il piano in cui si trova l'entità in questo momento.
-    pub fn get_floor(&self) -> FloorPtr {
-        self.floor.clone()
-    }
-
-    /// Modifica il piano dell'entità e la mette all'entrata di quello nuovo.
-    pub fn set_floor(&mut self, floor: FloorPtr) {
-        self.floor = floor;
-        self.position = self.floor.get().get_entrance();
-    }
-
-    /// Permette all'entità di fare un'azione e successivamente calcola
-    /// tutti gli effetti che devono essere applicati ad essa.\
+    /// Permette all'entità di mostrare il piano in cui si trova e di fare una mossa.\
+    /// Il piano viene mostrato tramite il behavior dell'entità e successivamente viene chiesto di fare un'azione.\
+    /// Dopodichè vengono calcolati tutti gli effetti che devono essere applicati all'entità.\
     /// Nel caso in cui l'entità non sia più in vita questo metodo ritornerà false
-    /// e non permetterà all'entità di fare un update.\
+    /// e non permetterà all'entità di fare update.\
     /// Nel caso in cui l'entità non riesca a fare l'update viene ritornato false.\
     /// Cio significa che l'entità verrà rimossa dal gioco.
-    pub fn update(&mut self) -> bool {
-        if self.is_alive() && matches!(self.compute_action(), Some(_)) {
-            self.compute_effects();
+    pub fn update(&mut self, floor: &mut Floor) -> bool {
+        self.behavior.update(floor.get_limited_view_floor(self));
+        if self.is_alive() && matches!(self.compute_action(floor), Some(_)) {
+            self.compute_effects(floor);
             return true;
         }
         false
     }
 
-    /// Permette all'entità di mostrare il piano in cui si trova e di fare una mossa.\
-    /// Ha la stessa funzionalità di update() ma prima mostra il piano dell'entità.\
-    /// Il piano viene mostrato tramite il behavior dell'entità.
-    pub fn update_display(&mut self, floor: FloorView) -> bool {
-        self.behavior.update(floor);
-        self.update()
-    }
-
     /// calcola gli effetti e li applica all'entità.
-    fn compute_effects(&mut self) {
+    fn compute_effects(&mut self, floor: &mut Floor) {
         let total = self.effects.len(); // len could change
         for _ in 0..total {
             if let Some(effect) = self.effects.pop_front() {
-                effect.apply_to(self);
+                effect.apply_to(self, floor);
             }
         }
     }
     /// prende una decisione e applica l'azione da fare
     /// L'azione compiuta viene restituita, altrimenti None
-    fn compute_action(&mut self) -> Option<Action> {
+    fn compute_action(&mut self, floor: &mut Floor) -> Option<Action> {
         let action = self.behavior.get_next_action()?;
         let action = match self.buffer {
             Action::DoNothing => action,
@@ -210,7 +189,7 @@ impl Entity {
         };
 
         let result = Some(action.clone());
-        action.apply(self);
+        action.apply(self, floor);
         result
     }
 }
@@ -248,7 +227,7 @@ impl Action {
     /// \
     /// Es. Move(Up) sposterà l'entità da una posizione (x,y) -> (x,y+1)\
     /// e applicherà qualunque effetto che si trovi sulla cella di destinazione
-    pub fn apply(self, entity: &mut Entity) {
+    pub fn apply(self, entity: &mut Entity, floor: &mut Floor) {
         match self {
             Action::DoNothing => {}
             Action::Move(direction) => {
@@ -256,8 +235,6 @@ impl Action {
                 entity.direction = direction;
                 entity.position = pos;
 
-                let mut floor = entity.floor.clone();
-                let mut floor = floor.get();
                 let cell = floor.get_cell(pos);
                 cell.entity_over(entity);
             }
