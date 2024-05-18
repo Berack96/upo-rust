@@ -34,7 +34,7 @@ impl Cell {
             }
             Cell::Wall => {
                 entity.direction.invert();
-                entity.position = entity.direction.move_from(entity.position);
+                entity.direction.move_from(&mut entity.position);
             }
             _ => (),
         }
@@ -115,8 +115,7 @@ impl Effect for Confusion {
     fn apply_to(&self, entity: &mut Entity, floor: &mut Floor) {
         if self.0 > 0 {
             let rng = floor.get_rng();
-            let coin_flip = rng.gen_range(0..=1);
-            if coin_flip == 1 {
+            if rng.gen_bool(0.5) {
                 let random_direction = Direction::random(rng);
                 entity.buffer = Action::Move(random_direction);
             }

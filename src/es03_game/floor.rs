@@ -55,8 +55,14 @@ impl Floor {
     }
 
     /// Restituisce la cella nella posizione indicata.\
-    /// Con essa si può fare cio che si vuole, e quindi anche modificarla.
-    pub fn get_cell(&mut self, pos: Position) -> &mut Cell {
+    /// Con essa si può fare cio che si vuole, e quindi anche modificarla.\
+    /// Nel caso in cui la posizione non sia all'interno del piano, essa viene modificata
+    /// facendola rientrare nei limiti di esso.\
+    /// Es. pos(2,3) ma il piano è di max 2 allora diventa -> pos(2,2)
+    pub fn get_cell(&mut self, pos: &mut Position) -> &mut Cell {
+        let len = self.grid.len() - 1;
+        pos.0 = pos.0.min(len);
+        pos.1 = pos.1.min(len);
         &mut self.grid[pos.0][pos.1]
     }
 
@@ -102,7 +108,7 @@ impl Floor {
         }
     }
 
-    /// Crea una view del piano.\
+    /// Crea una view del piano con l'entità partecipante all'update.
     pub fn get_limited_view_floor<'a>(&'a self, entity: &'a Entity) -> FloorView<'a> {
         FloorView::new(self, entity)
     }
@@ -131,34 +137,25 @@ impl<'a> FloorView<'a> {
     pub fn as_char_grid(&self) -> Vec<Vec<char>> {
         let grid = &self.floor.grid;
         let size = grid.len();
-        let mut grid: Vec<Vec<char>> = (0..size)
+        let mut grid = (0..size)
             .map(|y| {
-                let row = (0..size).map(|x| Some(&grid[x][y]));
-                let mut row: Vec<_> = row
-                    .clone()
-                    .zip(row.skip(1).chain(std::iter::once(None)))
-                    .flat_map(Self::increase_x_dimension)
-                    .collect();
-                row.push('\n');
-                row
+                (0..size)
+                    .flat_map(|x| {
+                        let cell = &grid[x][y];
+                        let ch = cell.as_char();
+                        match cell {
+                            Cell::Wall => [ch, ch, ch],
+                            _ => [' ', ch, ' '],
+                        }
+                    })
+                    .chain(std::iter::once('\n'))
+                    .collect::<Vec<_>>()
             })
-            .collect();
+            .collect::<Vec<_>>();
 
         let pos = &self.entity.position;
-        grid[pos.1][pos.0 * 2] = self.entity.direction.as_char();
+        grid[pos.1][pos.0 * 3 + 1] = self.entity.direction.as_char();
         grid
-    }
-
-    fn increase_x_dimension(tuple: (Option<&Cell>, Option<&Cell>)) -> Vec<char> {
-        let (a, b) = tuple;
-        let a = a.unwrap();
-        if let Some(b) = b {
-            let one_is_wall = matches!(b, Cell::Wall) || matches!(a, Cell::Wall);
-            let c = if one_is_wall { Cell::Wall } else { Cell::Empty };
-            vec![a.as_char(), c.as_char()]
-        } else {
-            vec![a.as_char()]
-        }
     }
 }
 

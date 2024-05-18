@@ -12,12 +12,12 @@ use std::{collections::VecDeque, fmt::Display, io::Write, mem};
 /// È molto più facile capire a colpo d'occhio Position rispetto a (usize, usize)\
 /// I due valori sono la posizione sull'asse X e sull'asse Y\
 /// Il punto (0,0) si trova in basso a sinista.
-#[derive(PartialEq, Eq, Clone, Copy, Deserialize, Serialize)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Debug, Deserialize, Serialize)]
 pub struct Position(pub usize, pub usize);
 
 /// Indica la direzione dove una entità sta guardando.\
 /// È possibile anche non guardare in nessuna direzione tramite None.
-#[derive(PartialEq, Eq, Clone, Copy, Deserialize, Serialize)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Deserialize, Serialize)]
 pub enum Direction {
     Up,
     Down,
@@ -38,18 +38,20 @@ impl Direction {
             _ => Direction::None,
         };
     }
-    /// Calcola la nuova posizione in base a dove si stà guardando.\
+    /// Calcola e modifica la posizione in base a dove si stà guardando.\
+    /// Il valore ritornato sarà la posizione modificata che è stata passata in input.\
     /// La posizione viene modificata come se si stesse avanzando di una
     /// unità di spazio.\
     /// Es. (0,0) Up -> aumento la y di uno (0,1)
-    pub fn move_from(&self, pos: Position) -> Position {
+    pub fn move_from<'a>(&self, pos: &'a mut Position) -> &'a mut Position {
         match *self {
-            Direction::Up => Position(pos.0, pos.1 + 1),
-            Direction::Down => Position(pos.0, pos.1 - 1),
-            Direction::Right => Position(pos.0 + 1, pos.1),
-            Direction::Left => Position(pos.0 - 1, pos.1),
-            Direction::None => pos,
-        }
+            Direction::Up => pos.1 += 1,
+            Direction::Down => pos.1 -= if pos.1 == 0 { 0 } else { 1 },
+            Direction::Right => pos.0 += 1,
+            Direction::Left => pos.0 -= if pos.0 == 0 { 0 } else { 1 },
+            Direction::None => (),
+        };
+        pos
     }
     /// Restituisce una direzione casuale a partire da un generatore.\
     /// La direzione viene generata con una distribuzione uniforme, ovvero non
@@ -101,12 +103,7 @@ impl Entity {
     /// il decisore che permette di muoversi (giocatore o IA) e il piano in cui si trova.\
     /// La posizione sarà all'entrata del piano (o in una cella vicina nel caso ci siano altre entità sopra),
     /// non avrà effetti, azioni o una direzione in particolare.
-    pub fn new(
-        name: String,
-        health: i32,
-        attack: i32,
-        behavior: Box<dyn Behavior>,
-    ) -> Self {
+    pub fn new(name: String, health: i32, attack: i32, behavior: Box<dyn Behavior>) -> Self {
         Self {
             name,
             behavior,
@@ -199,7 +196,7 @@ impl Display for Entity {
         let times = 20;
         let health_bar = (self.health * times) / self.health_max;
 
-        let filled = "█".repeat(health_bar as usize);
+        let filled = "■".repeat(health_bar as usize);
         let empty = " ".repeat((times - health_bar) as usize);
         let health_bar = format!("[{}{}]", filled, empty);
 
@@ -231,11 +228,10 @@ impl Action {
         match self {
             Action::DoNothing => {}
             Action::Move(direction) => {
-                let pos = direction.move_from(entity.position);
+                direction.move_from(&mut entity.position);
                 entity.direction = direction;
-                entity.position = pos;
 
-                let cell = floor.get_cell(pos);
+                let cell = floor.get_cell(&mut entity.position);
                 cell.entity_over(entity);
             }
         }

@@ -7,18 +7,31 @@ use std::ops::Range;
 
 /// Struttura di configurazione per la creazione di un dungeon.\
 /// Ogni elemento indica un parametro per la generazione di un piano o di una entitità.\
-/// Esiste una implementazione di default di questa struttura che genera un dungeon
-/// molto semplice e standard.
+/// Esiste una implementazione di default di questa struttura che genera un dungeon standard.
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Config {
     pub game_seed: u64,
-    pub room_size: Range<usize>,
-    pub floor_size: Range<usize>,
+    pub maze_generation: ConfigMaze,
     pub effects_total: usize,
     pub effects: Vec<ConfigEffect>,
     pub entities_total: usize,
     pub entities: Vec<ConfigEntity>,
     pub player_stats: ConfigPlayer,
+}
+
+/// Configura la generazione del labirinto all'interno del generatore.\
+/// I parametri principali servono ad indicare quanto grande è il piano e quanto grandi sono le stanze.\
+/// *room_placing_attempts* indica quanti tentativi il generatore deve fare prima di smettere di creare stanze.\
+/// *straight_percentage* indica da 0 a 100 quanta percentuale c'è che un corridioio, quando viene generato
+/// rimanga dritto o viri.\
+/// *dead_ends* indica quanti corridoi che non portano a nulla devono esserci alla fine della generazione.
+#[derive(Clone, Deserialize, Serialize)]
+pub struct ConfigMaze {
+    pub floor_size: Range<usize>,
+    pub room_size: Range<usize>,
+    pub room_placing_attempts: u32,
+    pub straight_percentage: u32,
+    pub dead_ends: u32,
 }
 
 /// Un effetto che si può trovare per terra nel dungeon.\
@@ -62,8 +75,13 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             game_seed: 0,
-            room_size: 5..10,
-            floor_size: 30..40,
+            maze_generation: ConfigMaze {
+                floor_size: 30..40,
+                room_size: 5..10,
+                room_placing_attempts: 10,
+                straight_percentage: 90,
+                dead_ends: 0,
+            },
             effects: vec![
                 ConfigEffect {
                     effect: Box::new(InstantDamage(20)),
@@ -87,7 +105,7 @@ impl Default for Config {
             player_stats: ConfigPlayer {
                 health: 1000,
                 attack: 100,
-            }
+            },
         }
     }
 }
