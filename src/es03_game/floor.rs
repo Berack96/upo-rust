@@ -4,12 +4,15 @@ use super::{
 };
 use rand_pcg::Pcg32;
 use serde::{Deserialize, Serialize};
-use std::{collections::VecDeque, fmt::Display};
+use std::{
+    collections::{HashMap, VecDeque},
+    fmt::Display,
+};
 
 /// Indica un piano del dungeon, in essa si possono trovare le celle in cui si
 /// cammina e le entità che abitano il piano.\
 /// Per poter accedere a questa struttura è necessario utilizzare FloorPtr e fare get()
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Floor {
     level: usize,
     grid: Vec<Vec<Cell>>,
@@ -41,6 +44,12 @@ impl Floor {
     /// Indica se il piano ha almeno un giocatore in vita o meno
     pub fn has_players(&self) -> bool {
         self.players.iter().any(|player| player.is_alive())
+    }
+
+    /// Restituisce la grandezza di un lato del piano.\
+    /// Per avere la quantità di celle basterà prendere il valore ed elevarlo a 2.
+    pub fn get_size(&self) -> usize {
+        self.grid.len()
     }
 
     /// Restituisce il livello di profondità del piano
@@ -112,6 +121,21 @@ impl Floor {
     pub fn get_limited_view_floor<'a>(&'a self, entity: &'a Entity) -> FloorView<'a> {
         FloorView::new(self, entity)
     }
+
+    /// Ritorna un iteratore a tutte le entità del piano.\
+    /// Le entità del piano si dividono in giocatori e entità, e questo iteratore le ritorna tutte,
+    /// passando prima dai giocatori e poi da tutto il resto.
+    pub fn get_all_entities<'a>(&'a self) -> impl Iterator<Item = &Entity> + 'a {
+        self.players.iter().chain(self.entities.iter())
+    }
+
+    /// Controlla che nella posizione indicata non ci siano altre entità e restituisce il numero di collisioni trovate.\
+    /// Questo metodo controlla TUTTE le entità e i giocatori del piano, quindi si svolge in O(n)
+    fn collisions(&self, pos: &Position) -> usize {
+        self.get_all_entities()
+            .filter(|entity| entity.position == *pos)
+            .fold(0, |count, _| count + 1)
+    }
 }
 
 /// Struttura di mezzo tra un piano e il gioco vero e proprio.\
@@ -120,6 +144,13 @@ impl Floor {
 pub struct FloorView<'a> {
     pub entity: &'a Entity,
     pub floor: &'a Floor,
+}
+
+/// todo!() add docs
+pub struct CellView<'a> {
+    pub position: Position,
+    pub entity: Option<&'a Entity>,
+    pub cell: &'a Cell,
 }
 
 impl<'a> FloorView<'a> {
@@ -133,29 +164,80 @@ impl<'a> FloorView<'a> {
         }
     }
 
+    /// Ritorna un iteratore contenente gli iteratori di ogni riga del piano.
+    pub fn get_grid(&self, view: usize) -> impl Iterator<Item = impl Iterator<Item = CellView>> {
+        let grid = &self.floor.grid;
+        let entities = self
+            .floor
+            .get_all_entities()
+            .chain(std::iter::once(self.entity))
+            .map(|entity| (&entity.position, entity))
+            .collect::<HashMap<_, _>>();
+        let entities = std::rc::Rc::new(std::cell::RefCell::new(entities));
+
+        let temp_x = self.entity.position.0.saturating_sub(view);
+        let temp_y = self.entity.position.1.saturating_sub(view);
+        let size_x = temp_x.saturating_add(2 * view).min(grid.len());
+        let size_y = temp_y.saturating_add(2 * view).min(grid.len());
+        let view_x = size_x.saturating_sub(2 * view);
+        let view_y = size_y.saturating_sub(2 * view);
+
+        (view_y..size_y).rev().map(move |y| {
+            let entities = entities.clone();
+            (view_x..size_x)
+                .map(move |x| Position(x, y))
+                .map(move |position| {
+                    let cell = &grid[position.0][position.1];
+                    let entity = entities.borrow_mut().remove(&position);
+                    CellView {
+                        position,
+                        entity,
+                        cell,
+                    }
+                })
+        })
+    }
+
     /// Rappresentazione del piano come matrice di char
     pub fn as_char_grid(&self) -> Vec<Vec<char>> {
-        let grid = &self.floor.grid;
-        let size = grid.len();
-        let mut grid = (0..size)
-            .map(|y| {
-                (0..size)
-                    .flat_map(|x| {
-                        let cell = &grid[x][y];
-                        let ch = cell.as_char();
-                        match cell {
-                            Cell::Wall => [ch, ch, ch],
-                            _ => [' ', ch, ' '],
-                        }
-                    })
-                    .chain(std::iter::once('\n'))
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
+        self.get_grid(self.floor.grid.len())
+            .map(|iter| {
+                iter.flat_map(|view| {
+                    if let Some(e) = view.entity {
+                        return [' ', e.direction.as_char(), ' '];
+                    }
 
-        let pos = &self.entity.position;
-        grid[pos.1][pos.0 * 3 + 1] = self.entity.direction.as_char();
-        grid
+                    let ch = view.cell.as_char();
+                    match view.cell {
+                        Cell::Wall => [ch, ch, ch],
+                        _ => [' ', ch, ' '],
+                    }
+                })
+                .chain(std::iter::once('\n'))
+                .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+    }
+
+    /// todo!() add docs
+    pub fn box_of(size: usize, iter: impl Iterator<Item = char>) -> impl Iterator<Item = char> {
+        std::iter::once('╔')
+            .chain(std::iter::repeat('═').take(size + 2))
+            .chain(['╗', '\n'].into_iter())
+            .chain(iter.enumerate().flat_map(move |(i, c)| {
+                let modulo = i % size;
+                if modulo == 0 {
+                    vec!['║', ' ', c]
+                } else if modulo == size - 1 {
+                    vec![c, ' ', '║', '\n']
+                } else {
+                    vec![c]
+                }
+                .into_iter()
+            }))
+            .chain(std::iter::once('╚'))
+            .chain(std::iter::repeat('═').take(size + 2))
+            .chain(['╝', '\n'].into_iter())
     }
 }
 
@@ -164,7 +246,6 @@ impl<'a> Display for FloorView<'a> {
         let grid: String = self
             .as_char_grid()
             .iter()
-            .rev()
             .map(|row| row.iter().collect::<String>())
             .collect();
 

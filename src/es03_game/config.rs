@@ -8,7 +8,7 @@ use std::ops::Range;
 /// Struttura di configurazione per la creazione di un dungeon.\
 /// Ogni elemento indica un parametro per la generazione di un piano o di una entitità.\
 /// Esiste una implementazione di default di questa struttura che genera un dungeon standard.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Config {
     pub game_seed: u64,
     pub maze_generation: ConfigMaze,
@@ -25,7 +25,7 @@ pub struct Config {
 /// *straight_percentage* indica da 0 a 100 quanta percentuale c'è che un corridioio, quando viene generato
 /// rimanga dritto o viri.\
 /// *dead_ends* indica quanti corridoi che non portano a nulla devono esserci alla fine della generazione.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ConfigMaze {
     pub floor_size: Range<usize>,
     pub room_size: Range<usize>,
@@ -40,16 +40,16 @@ pub struct ConfigMaze {
 /// Es. effetto A priorità 1 ed effetto B con priorità 2\
 /// Se in Config mettiamo 15 effetti per piano, allora avremo
 /// in media 10 A e 5 B per ogni piano.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ConfigEffect {
     pub floors: Range<usize>,
     pub effect: Box<dyn Effect>,
-    pub priority: usize,
+    pub priority: u32,
 }
 
 /// Valori di base per le statistiche di un giocatore.\
 /// Esse verranno utilizzate quando un giocatore verrà creato.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ConfigPlayer {
     pub health: i32,
     pub attack: i32,
@@ -61,14 +61,14 @@ pub struct ConfigPlayer {
 /// Es. entità A priorità 1 ed entità B con priorità 2\
 /// Se in Config mettiamo 15 entità per piano, allora avremo
 /// in media 10 A e 5 B per ogni piano.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ConfigEntity {
     pub floors: Range<usize>,
     pub name: String,
     pub decider: Box<dyn Behavior>,
     pub health: i32,
     pub attack: i32,
-    pub priority: usize,
+    pub priority: u32,
 }
 
 impl Default for Config {
@@ -103,8 +103,8 @@ impl Default for Config {
             entities: vec![],
             entities_total: 0,
             player_stats: ConfigPlayer {
-                health: 1000,
-                attack: 100,
+                health: 100,
+                attack: 10,
             },
         }
     }

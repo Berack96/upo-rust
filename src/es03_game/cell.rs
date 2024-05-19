@@ -8,7 +8,7 @@ use std::fmt::Display;
 /// Essa ha diversi valori in base a cosa si può fare o meno su di essa.
 /// Nel caso in cui passi sopra una entià esiste un metodo entity_over che
 /// gestisce le varie casistiche.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Cell {
     Entance,
     Exit,
@@ -71,7 +71,7 @@ impl Display for Cell {
 /// In questo modo si possono creare molteplici effetti che implementano
 /// questo trait senza il bisogno di avere un Enum con essi
 #[typetag::serde(tag = "type")]
-pub trait Effect: DynClone {
+pub trait Effect: DynClone + core::fmt::Debug {
     /// Indica se l'effetto rimane nel terreno dopo la sua applicazione ad una entità.\
     /// Nel caso di true, l'effetto non verrà rimosso dal terreno,
     /// eltrimenti la cella dove si trova questo effetto diventerà Empty
@@ -89,7 +89,7 @@ clone_trait_object!(Effect);
 /// Una volta utilizzato verrà rimosso dal piano.\
 /// Nel caso in cui il danno sia negativo, l'entità verrà curata
 /// (sempre che la sua vita sia un valore positivo e non negativo)
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InstantDamage(pub i32);
 #[typetag::serde]
 impl Effect for InstantDamage {
@@ -105,7 +105,7 @@ impl Effect for InstantDamage {
 /// Esso ignora il successivo comando che verrà impartito all'entità
 /// con una probabilità del 50% e inserirà un movimento in una direzione casuale.\
 /// Come parametro si può passare per quanti turni l'effetto dura
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Confusion(pub u8);
 #[typetag::serde]
 impl Effect for Confusion {
@@ -128,7 +128,7 @@ impl Effect for Confusion {
 /// Similmente a InstantDamage, se il danno è negativo allora il personaggio verrà curato,
 /// sempre a patto che la sua vita sia un valore positivo.\
 /// L'effetto dura un determinato numero di turni.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TurnBasedDamage {
     time: u8,
     damage: i32,

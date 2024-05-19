@@ -54,13 +54,13 @@ impl<'a> Generator<'a> {
     /// Questo metodo creerà un piano avente delle stanze collegate tra di loro tramite dei
     /// corridoi; inoltre in esse verranno inseriti degli effetti.
     pub fn build_floor(mut self) -> Floor {
-        let attempts = self.config.maze_generation.room_placing_attempts;
+        let maze_gen = &self.config.maze_generation;
         let room_size = self.config.maze_generation.room_size.clone();
         let mut grid = MazeGenerator::new(self.size, room_size, &mut self.rng)
-            .generate_rooms(attempts)
-            .generate_labyrinth(80)
+            .generate_rooms(maze_gen.room_placing_attempts)
+            .generate_labyrinth(maze_gen.straight_percentage)
             .connect_regions()
-            .remove_dead_ends(0)
+            .remove_dead_ends(maze_gen.dead_ends)
             .finalize(Cell::Wall, Cell::Empty);
 
         self.rand_place(&mut grid, Cell::Entance);
@@ -183,7 +183,7 @@ impl<'a> MazeGenerator<'a> {
     /// Nel caso si può decidere di lasciare qualche zona che non va a collegarsi da nessuna parte
     /// mettendo un numero > 0 nel cutoff.\
     /// Questo indicherà che nel labirinto ci saranno al massimo N corridioi senza uscita.
-    pub fn remove_dead_ends(mut self, cutoff: usize) -> Self {
+    pub fn remove_dead_ends(mut self, cutoff: u32) -> Self {
         let mut dead_ends = (0..self.size)
             .into_iter()
             .flat_map(|x| {
@@ -196,7 +196,7 @@ impl<'a> MazeGenerator<'a> {
             .collect::<VecDeque<_>>();
 
         while let Some(pos) = dead_ends.pop_front() {
-            if dead_ends.len() < cutoff {
+            if dead_ends.len() < cutoff as usize {
                 break;
             }
 
@@ -272,7 +272,7 @@ impl<'a> MazeGenerator<'a> {
     /// andare dritto quando crea il labirinto.\
     /// Con percentuali alte si avranno molti corridoi lunghi, con percentuali basse si avranno
     /// molte svolte.
-    pub fn generate_labyrinth(mut self, mut straight_percentage: usize) -> Self {
+    pub fn generate_labyrinth(mut self, mut straight_percentage: u32) -> Self {
         straight_percentage = straight_percentage.min(100); // cap at 100
 
         for x in (1..self.size).step_by(2) {
@@ -293,7 +293,7 @@ impl<'a> MazeGenerator<'a> {
     /// https://en.wikipedia.org/wiki/Maze_generation_algorithm#Iterative_implementation_(with_stack)\
     /// Il parametro straight_percentage indica quanto "scava" i corridoi del labirinto
     /// senza girare, e quindi creando lunghi segmenti.
-    fn grow_maze(&mut self, start: Position, straight_percentage: usize) {
+    fn grow_maze(&mut self, start: Position, straight_percentage: u32) {
         self.current_region += 1;
         self.set(&start, Some(self.current_region));
 
@@ -401,7 +401,7 @@ impl<'a> MazeGenerator<'a> {
 /// mentre i lati non hanno dimensione.\
 /// I punti quindi salvati sono il minimo e il massimo di un rettangolo ed indicano il
 /// punto più in basso da dove inizia l'area e quello più in alto.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Room {
     lo: Position,
     hi: Position,

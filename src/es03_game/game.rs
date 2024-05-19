@@ -15,7 +15,7 @@ use std::{
 /// Rappresenta un Dungeon in stile RogueLike.\
 /// In esso possiamo trovare dei piani generati casualmente
 /// e dei giocatori che esplorano.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Dungeon {
     floors: Vec<Floor>,
     config: Config,

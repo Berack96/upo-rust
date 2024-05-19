@@ -6,7 +6,7 @@ use dyn_clone::{clone_trait_object, DynClone};
 use rand::Rng;
 use rand_pcg::Pcg32;
 use serde::{Deserialize, Serialize};
-use std::{collections::VecDeque, fmt::Display, io::Write, mem};
+use std::{collections::VecDeque, fmt::Display, mem};
 
 /// Tupla nominata Position in modo che nel codice sia più chiaro a cosa serve.\
 /// È molto più facile capire a colpo d'occhio Position rispetto a (usize, usize)\
@@ -17,7 +17,7 @@ pub struct Position(pub usize, pub usize);
 
 /// Indica la direzione dove una entità sta guardando.\
 /// È possibile anche non guardare in nessuna direzione tramite None.
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Deserialize, Serialize)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, Deserialize, Serialize)]
 pub enum Direction {
     Up,
     Down,
@@ -85,7 +85,7 @@ impl Display for Direction {
 }
 
 /// Rappresenta una entità all'interno del dungeon.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Entity {
     name: String,
     effects: VecDeque<Box<dyn Effect>>,
@@ -210,7 +210,7 @@ impl Display for Entity {
 
 /// Azione che una qualsiasi entità può fare.
 /// L'azione DoNothing permette all'entità di saltare il turno nel caso in cui sia utile.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Action {
     Move(Direction),
     //Attack(Direction),
@@ -253,12 +253,16 @@ impl Action {
 /// In questo modo si possono creare molteplici comoprtamenti che implementano
 /// questo trait senza il bisogno di avere un Enum con essi
 #[typetag::serde(tag = "type")]
-pub trait Behavior: DynClone {
+pub trait Behavior: DynClone + core::fmt::Debug {
     /// In questo metodo viene passata una struttura che contiene una rappresentazione del
     /// piano semplice, avente solo delle informazioni parziali.\
     /// Questo serve a mostrare eventualmente delle possibili informazioni all'utente
     /// o di registrare dei valori per l'algoritmo di generazione delle azioni.
     fn update(&self, floor: FloorView);
+    /// Funzione che viene richiamata quando l'entità muore.\
+    /// I parametri servono a far vedere un'ultima volta i dati del piano corrente all'entità
+    /// in modo che possa eventualmente fare ulteriori calcoli.
+    fn you_died(&self, floor: FloorView);
     /// Genera una azione che poi verrà usata per l'entità associata.\
     /// L'azione può essere generata in qualunque modo: casuale, sempre la stessa,
     /// tramite interazione con console, o tramite una connessione ad un client.\
@@ -272,41 +276,13 @@ clone_trait_object!(Behavior);
 
 /// Semplice implementazione di un possibile comportamento di una entità.\
 /// In questo caso l'entità resterà immobile nel punto in cui si trova per sempre.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Immovable;
 #[typetag::serde]
 impl Behavior for Immovable {
     fn update(&self, _floor: FloorView) {}
+    fn you_died(&self, _floor: FloorView) {}
     fn get_next_action(&self) -> Option<Action> {
         Some(Action::DoNothing)
-    }
-}
-
-/// Semplice implementazione di una possibile interfaccia console.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct ConsoleInput;
-#[typetag::serde]
-impl Behavior for ConsoleInput {
-    fn update(&self, floor: FloorView) {
-        let mut term = console::Term::stdout();
-        let _ = term.clear_screen();
-        let _ = term.write_fmt(format_args!("{}\n", floor));
-    }
-    fn get_next_action(&self) -> Option<Action> {
-        let mut term = console::Term::stdout();
-        let _ = term.write("Insert your action [wasd or enter for nothing]: ".as_bytes());
-
-        loop {
-            if let Ok(ch) = term.read_char() {
-                match ch {
-                    '\n' => return Some(Action::DoNothing),
-                    'w' => return Some(Action::Move(Direction::Up)),
-                    'a' => return Some(Action::Move(Direction::Left)),
-                    's' => return Some(Action::Move(Direction::Down)),
-                    'd' => return Some(Action::Move(Direction::Right)),
-                    _ => (),
-                }
-            }
-        }
     }
 }
