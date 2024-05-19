@@ -90,23 +90,24 @@ impl Dungeon {
     /// - Update di tutte le entità del piano
     /// - Modifica di piano di eventuali giocatori
     pub fn compute_turn(&mut self) {
-        let moved: Option<Vec<Entity>> = self.floors.iter_mut().fold(None, |moved, floor| {
-            let removed = floor.has_players().then(|| {
-                let removed = floor.update_players();
+        let moved = self.floors.iter_mut().fold(None, |moved, floor| {
+            if floor.has_players() {
+                let _ = floor.update_players(); //todo!() evantually return the dead players? idk
                 floor.update_entities();
-                removed
-            });
-            if let Some(mut moved) = moved {
-                moved.drain(..).for_each(|player| floor.add_player(player));
             }
-            removed
+
+            if let Some(player) = moved {
+                floor.add_player(player);
+            }
+
+            floor.get_player_at_exit()
         });
 
-        if let Some(mut moved) = moved {
+        if let Some(player) = moved {
             self.build_next_floor();
             let len = self.floors.len();
             let floor = &mut self.floors[len - 1];
-            moved.drain(..).for_each(|player| floor.add_player(player));
+            floor.add_player(player);
         }
     }
 

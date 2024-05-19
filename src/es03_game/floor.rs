@@ -68,11 +68,11 @@ impl Floor {
     /// Nel caso in cui la posizione non sia all'interno del piano, essa viene modificata
     /// facendola rientrare nei limiti di esso.\
     /// Es. pos(2,3) ma il piano è di max 2 allora diventa -> pos(2,2)
-    pub fn get_cell(&mut self, pos: &mut Position) -> &mut Cell {
+    pub fn get_cell(&mut self, pos: &Position) -> &mut Cell {
         let len = self.grid.len() - 1;
-        pos.0 = pos.0.min(len);
-        pos.1 = pos.1.min(len);
-        &mut self.grid[pos.0][pos.1]
+        let x = pos.0.min(len);
+        let y = pos.1.min(len);
+        &mut self.grid[x][y]
     }
 
     /// Restituisce la posizione dell'entrata del piano.\
@@ -95,16 +95,39 @@ impl Floor {
 
     /// Fa l'update di tutti i giocatori e rimuove eventualmente quelli non più in vita, restituendoli dentro un vec
     pub fn update_players(&mut self) -> Vec<Entity> {
-        let mut remove = vec![];
+        let mut next_floor = vec![];
         for _ in 0..self.players.len() {
             let mut player = self.players.pop_front().unwrap();
             if player.update(self) {
                 self.players.push_back(player);
             } else {
-                remove.push(player);
+                next_floor.push(player);
             }
         }
-        remove
+        next_floor
+    }
+
+    /// Ritorna un eventuale giocatore che si trova sopra la cella di uscita del piano.\
+    /// Nel caso in cui non ci siano giocatori sopra, questo metodo ritornerà None.
+    pub fn get_player_at_exit(&mut self) -> Option<Entity> {
+        let index = self
+            .players
+            .iter()
+            .enumerate()
+            .filter_map(|(i, player)| {
+                let pos = &player.position;
+                match &self.grid[pos.0][pos.1] {
+                    Cell::Exit => Some(i),
+                    _ => None,
+                }
+            })
+            .next();
+
+        if let Some(i) = index {
+            self.players.remove(i)
+        } else {
+            None
+        }
     }
 
     /// Fa l'update di tutte le entità e rimuove eventualmente quelle non più in vita
@@ -217,27 +240,6 @@ impl<'a> FloorView<'a> {
                 .collect::<Vec<_>>()
             })
             .collect::<Vec<_>>()
-    }
-
-    /// todo!() add docs
-    pub fn box_of(size: usize, iter: impl Iterator<Item = char>) -> impl Iterator<Item = char> {
-        std::iter::once('╔')
-            .chain(std::iter::repeat('═').take(size + 2))
-            .chain(['╗', '\n'].into_iter())
-            .chain(iter.enumerate().flat_map(move |(i, c)| {
-                let modulo = i % size;
-                if modulo == 0 {
-                    vec!['║', ' ', c]
-                } else if modulo == size - 1 {
-                    vec![c, ' ', '║', '\n']
-                } else {
-                    vec![c]
-                }
-                .into_iter()
-            }))
-            .chain(std::iter::once('╚'))
-            .chain(std::iter::repeat('═').take(size + 2))
-            .chain(['╝', '\n'].into_iter())
     }
 }
 

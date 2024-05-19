@@ -56,14 +56,21 @@ impl<'a> Generator<'a> {
     pub fn build_floor(mut self) -> Floor {
         let maze_gen = &self.config.maze_generation;
         let room_size = self.config.maze_generation.room_size.clone();
-        let mut grid = MazeGenerator::new(self.size, room_size, &mut self.rng)
+        let mut gen = MazeGenerator::new(self.size, room_size, &mut self.rng);
+        let mut grid = gen
             .generate_rooms(maze_gen.room_placing_attempts)
             .generate_labyrinth(maze_gen.straight_percentage)
             .connect_regions()
             .remove_dead_ends(maze_gen.dead_ends)
             .finalize(Cell::Wall, Cell::Empty);
 
-        self.rand_place(&mut grid, Cell::Entance);
+        let index = gen.get_random_room_index();
+        let entrance = gen.get_room_ranges(index);
+        let index = gen.get_random_room_index();
+        let exit = gen.get_room_ranges(index);
+
+        self.rand_place(&mut grid, Cell::Entance, entrance.0, entrance.1);
+        self.rand_place(&mut grid, Cell::Exit, exit.0, exit.1);
         self.rand_place_effects(&mut grid);
         Floor::new(self.level, self.rng, vec![], grid)
     }
@@ -78,18 +85,24 @@ impl<'a> Generator<'a> {
             let index = self.rng.gen_range(0..effects.len());
             let effect = effects[index].effect.clone();
             let cell = Cell::Special(effect);
-            self.rand_place(grid, cell);
+            self.rand_place(grid, cell, 0..self.size, 0..self.size);
         }
     }
     /// piazza una cella in un punto casuale del piano.\
     /// il metodo contiuna a provare a piazzare la cella finche non trova una cella Empty.
-    fn rand_place(&mut self, grid: &mut Vec<Vec<Cell>>, cell: Cell) -> (usize, usize) {
+    fn rand_place(
+        &mut self,
+        grid: &mut Vec<Vec<Cell>>,
+        cell: Cell,
+        range_x: Range<usize>,
+        range_y: Range<usize>,
+    ) -> Position {
         loop {
-            let x = self.rng.gen_range(0..self.size.clone());
-            let y = self.rng.gen_range(0..self.size);
+            let x = self.rng.gen_range(range_x.clone());
+            let y = self.rng.gen_range(range_y.clone());
             if let Cell::Empty = grid[x][y] {
                 grid[x][y] = cell;
-                return (x, y);
+                return Position(x, y);
             }
         }
     }
@@ -183,7 +196,7 @@ impl<'a> MazeGenerator<'a> {
     /// Nel caso si può decidere di lasciare qualche zona che non va a collegarsi da nessuna parte
     /// mettendo un numero > 0 nel cutoff.\
     /// Questo indicherà che nel labirinto ci saranno al massimo N corridioi senza uscita.
-    pub fn remove_dead_ends(mut self, cutoff: u32) -> Self {
+    pub fn remove_dead_ends(&mut self, cutoff: u32) -> &mut Self {
         let mut dead_ends = (0..self.size)
             .into_iter()
             .flat_map(|x| {
@@ -215,7 +228,7 @@ impl<'a> MazeGenerator<'a> {
     /// Questa funzione serve per fare proprio quello, ovvero il collegamento fra di essi.\
     /// Il labirinto si può vedere come un grafo nel quale ci sono delle regioni (stanze e corridoi) scollegate
     /// fra di loro, e l'unico modo per metterle assieme è quello di preare degli archi (rompere i muri).\
-    pub fn connect_regions(mut self) -> Self {
+    pub fn connect_regions(&mut self) -> &mut Self {
         let mut connectors = self.get_regions_connectors();
         let mut merged = MergeSets::new(1, self.current_region);
         let mut keys = connectors.keys().map(|pos| pos.clone()).collect::<Vec<_>>();
@@ -272,7 +285,7 @@ impl<'a> MazeGenerator<'a> {
     /// andare dritto quando crea il labirinto.\
     /// Con percentuali alte si avranno molti corridoi lunghi, con percentuali basse si avranno
     /// molte svolte.
-    pub fn generate_labyrinth(mut self, mut straight_percentage: u32) -> Self {
+    pub fn generate_labyrinth(&mut self, mut straight_percentage: u32) -> &mut Self {
         straight_percentage = straight_percentage.min(100); // cap at 100
 
         for x in (1..self.size).step_by(2) {
@@ -347,7 +360,7 @@ impl<'a> MazeGenerator<'a> {
     /// Nel caso in cui questo metodo venga chiamato dopo la generazione del labirinto, e le stanze venissero
     /// inserite senza collisioni con quelle precedenti, il labirinto sottostante sarebbe sovrascritto.\
     /// Il parametro attempts indica dopo quanti inserimenti falliti si deve fermare.
-    pub fn generate_rooms(mut self, mut attempts: u32) -> Self {
+    pub fn generate_rooms(&mut self, mut attempts: u32) -> &mut Self {
         while attempts > 0 {
             let room = Room::rand(self.rng, self.size, self.rooms_size.clone());
             if self.rooms.iter().any(|other| room.collide(other)) {
@@ -391,6 +404,17 @@ impl<'a> MazeGenerator<'a> {
     /// Nel caso None si indica un muro, mentre in Some(region) si indica la regione quella cella appartiene.
     fn get(&self, pos: &Position) -> Option<usize> {
         self.regions[pos.0][pos.1]
+    }
+    /// Ritorna un indice a caso fra quelli possibili riguardo le stanze create.
+    pub fn get_random_room_index(&mut self) -> usize {
+        self.rng.gen_range(0..self.rooms.len())
+    }
+    /// Ritorna una coppia di ranges che indicano la zona in cui si trova la stanza indicata fra quelle generate.
+    pub fn get_room_ranges(&self, index: usize) -> (Range<usize>, Range<usize>) {
+        let room = &self.rooms[index.min(self.rooms.len())];
+        let x = room.lo.0..(room.hi.0 + 1);
+        let y = room.lo.1..(room.hi.1 + 1);
+        (x, y)
     }
 }
 

@@ -159,12 +159,24 @@ impl Entity {
     /// Nel caso in cui l'entità non riesca a fare l'update viene ritornato false.\
     /// Cio significa che l'entità verrà rimossa dal gioco.
     pub fn update(&mut self, floor: &mut Floor) -> bool {
-        self.behavior.update(floor.get_limited_view_floor(self));
-        if self.is_alive() && matches!(self.compute_action(floor), Some(_)) {
-            self.compute_effects(floor);
-            return true;
+        if !self.is_alive() {
+            self.behavior.you_died(floor.get_limited_view_floor(self));
+            return false;
         }
-        false
+
+        self.behavior.update(floor.get_limited_view_floor(self));
+        let action = self.compute_action(floor);
+        if action.is_none() {
+            return false;
+        }
+
+        if !self.is_alive() {
+            self.behavior.you_died(floor.get_limited_view_floor(self));
+            return false;
+        }
+
+        self.compute_effects(floor);
+        true
     }
 
     /// calcola gli effetti e li applica all'entità.
@@ -231,7 +243,7 @@ impl Action {
                 direction.move_from(&mut entity.position);
                 entity.direction = direction;
 
-                let cell = floor.get_cell(&mut entity.position);
+                let cell = floor.get_cell(&entity.position);
                 cell.entity_over(entity);
             }
         }

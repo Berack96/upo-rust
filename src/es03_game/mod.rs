@@ -48,9 +48,9 @@ pub mod generator;
  * Se volete potete anche cambiare le regole del gioco.
  * Mettere main e definizioni in files separati (le definizioni in uno o più files) e scrivete i test in una directory a parte.
  */
-pub fn run_console(player: String) {
+pub fn run_console(player: String, seed: u64) {
     let mut config = Config::default();
-    config.game_seed = rand::random();
+    config.game_seed = seed;
 
     let mut game = Dungeon::new_with(config);
     game.add_player(player, Box::new(ConsoleInput));
@@ -64,6 +64,17 @@ pub fn run_console(player: String) {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConsoleInput;
 impl ConsoleInput {
+    fn print_floor(&self, floor: FloorView, other:String) {
+        let mut term = console::Term::stdout();
+        let _ = term.clear_screen();
+        let _ = term.write_fmt(format_args!(
+            "{}{}\n{}\n",
+            Self::floor_as_string(&floor),
+            floor.entity,
+            other
+        ));
+    }
+    /// todo!() add docs
     fn floor_as_string(floor: &FloorView) -> String {
         let view = 5;
         let size = (2 * view) * 3;
@@ -82,24 +93,36 @@ impl ConsoleInput {
             })
         });
 
-        FloorView::box_of(size, iter).collect()
+        Self::box_of(size, iter).collect()
+    }
+    /// todo!() add docs
+    fn box_of(size: usize, iter: impl Iterator<Item = char>) -> impl Iterator<Item = char> {
+        std::iter::once('╔')
+            .chain(std::iter::repeat('═').take(size + 2))
+            .chain(['╗', '\n'].into_iter())
+            .chain(iter.enumerate().flat_map(move |(i, c)| {
+                let modulo = i % size;
+                if modulo == 0 {
+                    vec!['║', ' ', c]
+                } else if modulo == size - 1 {
+                    vec![c, ' ', '║', '\n']
+                } else {
+                    vec![c]
+                }
+                .into_iter()
+            }))
+            .chain(std::iter::once('╚'))
+            .chain(std::iter::repeat('═').take(size + 2))
+            .chain(['╝', '\n'].into_iter())
     }
 }
 #[typetag::serde]
 impl Behavior for ConsoleInput {
     fn update(&self, floor: FloorView) {
-        let mut term = console::Term::stdout();
-        let _ = term.clear_screen();
-        let _ = term.write_fmt(format_args!(
-            "{}{}\n",
-            Self::floor_as_string(&floor),
-            floor.entity
-        ));
+        self.print_floor(floor, "".to_string());
     }
     fn you_died(&self, floor: FloorView) {
-        let mut term = console::Term::stdout();
-        let _ = term.clear_screen();
-        let _ = term.write_fmt(format_args!("{}\nYOU DIED!\n", floor));
+        self.print_floor(floor, "YOU DIED!".to_string());
     }
     fn get_next_action(&self) -> Option<Action> {
         let mut term = console::Term::stdout();
