@@ -1,4 +1,7 @@
-use super::{entities::{Action, Direction, Entity}, floor::Floor};
+use super::{
+    entities::{Action, Direction, Entity},
+    floor::Floor,
+};
 use dyn_clone::{clone_trait_object, DynClone};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -45,7 +48,7 @@ impl Cell {
         match self {
             Cell::Entance => ' ',
             Cell::Exit => '¤',
-            Cell::Special(_) => '§',
+            Cell::Special(effect) => effect.as_char(),
             Cell::Wall => '█',
             Cell::Empty => ' ',
         }
@@ -82,6 +85,10 @@ pub trait Effect: DynClone + core::fmt::Debug {
     /// Tramite l'entità si può anche accedere al piano dove si trova per
     /// poter modificare eventualmente qualcosa.
     fn apply_to(&self, entity: &mut Entity, floor: &mut Floor);
+    /// Ritorna un carattere che rappresenta l'effetto.
+    fn as_char(&self) -> char {
+        '?'
+    }
 }
 clone_trait_object!(Effect);
 
@@ -98,6 +105,13 @@ impl Effect for InstantDamage {
     }
     fn apply_to(&self, entity: &mut Entity, _floor: &mut Floor) {
         entity.apply_damage(self.0);
+    }
+    fn as_char(&self) -> char {
+        if self.0 <= 0 {
+            '+'
+        } else {
+            '-'
+        }
     }
 }
 

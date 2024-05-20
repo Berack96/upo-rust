@@ -138,6 +138,16 @@ impl Entity {
         self.health
     }
 
+    /// Restituisce il valore della vita massima dell'entità.\
+    pub fn get_health_max(&self) -> i32 {
+        self.health_max
+    }
+
+    /// Restituisce il valore del nome dell'entità.\
+    pub fn get_name(&self) -> &String {
+        &self.name
+    }
+
     /// Applica il valore inserito come danno alla vita.\
     /// Nel caso in cui il danno sia negativo allora verrà interpretato come cura.\
     /// Nel caso in cui la vita sia negativa la logica sarà inversa.\
@@ -176,6 +186,10 @@ impl Entity {
         }
 
         self.compute_effects(floor);
+        if !self.is_alive() {
+            self.behavior.you_died(floor.get_limited_view_floor(self));
+            return false
+        }
         true
     }
 

@@ -1,7 +1,7 @@
 use self::{
     cell::Cell,
     config::Config,
-    entities::{Action, Behavior, Direction},
+    entities::{Action, Behavior, Direction, Entity},
     floor::FloorView,
     game::Dungeon,
 };
@@ -60,60 +60,84 @@ pub fn run_console(player: String, seed: u64) {
     }
 }
 
-/// Implementazione di una possibile interfaccia console.
+const COLOR_RESET: &str = "\x1b[0m";
+const COLOR_EFFECT: &str = "\x1b[95m";
+const COLOR_ENEMY: &str = "\x1b[38;5;1m";
+const COLOR_PLAYER: &str = "\x1b[38;5;166m";
+const COLOR_PLAYER_HEALTH: &str = "\x1b[31m";
+
+/// Implementazione di una possibile interfaccia console.\
+/// Ha fin troppi metodi per far vedere in modo carino il gioco, ma comunque la parte importante
+/// è l'implementazione del Behavior.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConsoleInput;
 impl ConsoleInput {
-    fn print_floor(&self, floor: FloorView, other:String) {
+    /// todo!() add docs
+    fn print_floor(&self, floor: FloorView, other: String) {
         let mut term = console::Term::stdout();
         let _ = term.clear_screen();
         let _ = term.write_fmt(format_args!(
-            "{}{}\n{}\n",
+            "{}Floor lv.{:2} - {}\n{other}\n",
             Self::floor_as_string(&floor),
-            floor.entity,
-            other
+            floor.floor.get_level(),
+            Self::entity_as_string(floor.entity),
         ));
+    }
+    /// todo!() add docs
+    fn entity_as_string(entity: &Entity) -> String {
+        let times = 20;
+        let health_bar = (entity.get_health() * times) / entity.get_health_max();
+
+        let filled = "■".repeat(health_bar as usize);
+        let empty = " ".repeat((times - health_bar) as usize);
+        format!(
+            "{}: [{COLOR_PLAYER_HEALTH}{filled}{empty}{COLOR_RESET}] {:4}/{:4}",
+            entity.get_name(),
+            entity.get_health(),
+            entity.get_health_max()
+        )
     }
     /// todo!() add docs
     fn floor_as_string(floor: &FloorView) -> String {
         let view = 5;
         let size = (2 * view) * 3;
-        let iter = floor.get_grid(view).flat_map(|iter| {
-            iter.flat_map(|view| {
+        let iter = floor.get_grid(view).map(|iter| {
+            iter.map(|view| {
                 if let Some(e) = view.entity {
-                    return [' ', e.direction.as_char(), ' '].into_iter();
+                    let color = if floor.entity.position == e.position {
+                        COLOR_PLAYER
+                    } else {
+                        COLOR_ENEMY
+                    };
+                    return format!("{} {} {COLOR_RESET}", color, e.direction.as_char());
                 }
 
-                let ch = view.cell.as_char();
+                let cell = view.cell.as_char();
                 match view.cell {
-                    Cell::Wall => [ch, ch, ch],
-                    _ => [' ', ch, ' '],
+                    Cell::Special(_) => format!("{COLOR_EFFECT} {cell} {COLOR_RESET}"),
+                    Cell::Wall => format!("{cell}{cell}{cell}"),
+                    _ => format!(" {cell} "),
                 }
-                .into_iter()
             })
+            .collect()
         });
 
         Self::box_of(size, iter).collect()
     }
     /// todo!() add docs
-    fn box_of(size: usize, iter: impl Iterator<Item = char>) -> impl Iterator<Item = char> {
-        std::iter::once('╔')
-            .chain(std::iter::repeat('═').take(size + 2))
-            .chain(['╗', '\n'].into_iter())
-            .chain(iter.enumerate().flat_map(move |(i, c)| {
-                let modulo = i % size;
-                if modulo == 0 {
-                    vec!['║', ' ', c]
-                } else if modulo == size - 1 {
-                    vec![c, ' ', '║', '\n']
-                } else {
-                    vec![c]
-                }
-                .into_iter()
+    fn box_of(size: usize, iter: impl Iterator<Item = String>) -> impl Iterator<Item = String> {
+        std::iter::once("╔".to_string())
+            .chain(std::iter::repeat("═".to_string()).take(size + 2))
+            .chain(std::iter::once("╗\n".to_string()))
+            .chain(iter.map(|string| {
+                std::iter::once("║ ".to_string())
+                    .chain(std::iter::once(string))
+                    .chain(std::iter::once(" ║\n".to_string()))
+                    .collect()
             }))
-            .chain(std::iter::once('╚'))
-            .chain(std::iter::repeat('═').take(size + 2))
-            .chain(['╝', '\n'].into_iter())
+            .chain(std::iter::once("╚".to_string()))
+            .chain(std::iter::repeat("═".to_string()).take(size + 2))
+            .chain(std::iter::once("╝\n".to_string()))
     }
 }
 #[typetag::serde]

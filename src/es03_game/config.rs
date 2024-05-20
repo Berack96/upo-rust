@@ -89,7 +89,7 @@ impl Default for Config {
                     priority: 1,
                 },
                 ConfigEffect {
-                    effect: Box::new(InstantDamage(-20)),
+                    effect: Box::new(InstantDamage(-10)),
                     floors: 0..255,
                     priority: 1,
                 },
