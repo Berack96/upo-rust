@@ -56,8 +56,39 @@ pub fn run_console(player: String, seed: u64) {
     game.add_player(player, Box::new(ConsoleInput));
 
     while game.has_players() {
+        let _ = game.save("save.json");
         game.compute_turn();
     }
+}
+
+/// todo!() add docs
+pub fn box_of(
+    size: usize,
+    title: String,
+    iter: impl Iterator<Item = String>,
+) -> impl Iterator<Item = String> {
+    assert!(
+        size >= title.len(),
+        "Title must not exceed the size of the box!"
+    );
+
+    let len = (size - title.len()) / 2;
+    let correction = if 2 * len + title.len() < size { 1 } else { 0 };
+
+    std::iter::once("╔".to_string())
+    .chain(std::iter::repeat("═".to_string()).take(len + 1))
+    .chain(std::iter::once(title))
+    .chain(std::iter::repeat("═".to_string()).take(len + 1 + correction))
+        .chain(std::iter::once("╗\n".to_string()))
+        .chain(iter.map(|string| {
+            std::iter::once("║ ".to_string())
+                .chain(std::iter::once(string))
+                .chain(std::iter::once(" ║\n".to_string()))
+                .collect()
+        }))
+        .chain(std::iter::once("╚".to_string()))
+        .chain(std::iter::repeat("═".to_string()).take(size + 2))
+        .chain(std::iter::once("╝\n".to_string()))
 }
 
 const COLOR_RESET: &str = "\x1b[0m";
@@ -77,9 +108,8 @@ impl ConsoleInput {
         let mut term = console::Term::stdout();
         let _ = term.clear_screen();
         let _ = term.write_fmt(format_args!(
-            "{}Floor lv.{:2} - {}\n{other}\n",
+            "{}{}\n{other}\n",
             Self::floor_as_string(&floor),
-            floor.floor.get_level(),
             Self::entity_as_string(floor.entity),
         ));
     }
@@ -122,33 +152,19 @@ impl ConsoleInput {
             .collect()
         });
 
-        Self::box_of(size, iter).collect()
-    }
-    /// todo!() add docs
-    fn box_of(size: usize, iter: impl Iterator<Item = String>) -> impl Iterator<Item = String> {
-        std::iter::once("╔".to_string())
-            .chain(std::iter::repeat("═".to_string()).take(size + 2))
-            .chain(std::iter::once("╗\n".to_string()))
-            .chain(iter.map(|string| {
-                std::iter::once("║ ".to_string())
-                    .chain(std::iter::once(string))
-                    .chain(std::iter::once(" ║\n".to_string()))
-                    .collect()
-            }))
-            .chain(std::iter::once("╚".to_string()))
-            .chain(std::iter::repeat("═".to_string()).take(size + 2))
-            .chain(std::iter::once("╝\n".to_string()))
+        let title = format!(" Floor lv.{:2} ", floor.floor.get_level());
+        box_of(size, title, iter).collect()
     }
 }
 #[typetag::serde]
 impl Behavior for ConsoleInput {
-    fn update(&self, floor: FloorView) {
+    fn update(&mut self, floor: FloorView) {
         self.print_floor(floor, "".to_string());
     }
-    fn you_died(&self, floor: FloorView) {
+    fn on_death(&mut self, floor: FloorView) {
         self.print_floor(floor, "YOU DIED!".to_string());
     }
-    fn get_next_action(&self) -> Option<Action> {
+    fn get_next_action(&mut self) -> Option<Action> {
         let mut term = console::Term::stdout();
         let _ = term.write("Insert your action [wasd or space for nothing]: ".as_bytes());
 

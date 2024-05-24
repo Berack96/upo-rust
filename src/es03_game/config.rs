@@ -1,6 +1,6 @@
 use super::{
     cell::{Confusion, Effect, InstantDamage},
-    entities::Behavior,
+    entities::{Behavior, RandomMovement},
 };
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
@@ -65,7 +65,7 @@ pub struct ConfigPlayer {
 pub struct ConfigEntity {
     pub floors: Range<usize>,
     pub name: String,
-    pub decider: Box<dyn Behavior>,
+    pub behavior: Box<dyn Behavior>,
     pub health: i32,
     pub attack: i32,
     pub priority: u32,
@@ -96,12 +96,19 @@ impl Default for Config {
                 ConfigEffect {
                     effect: Box::new(Confusion(10)),
                     floors: 0..255,
-                    priority: 1,
+                    priority: 10,
                 },
             ],
             effects_total: 45,
-            entities: vec![],
-            entities_total: 0,
+            entities: vec![ConfigEntity {
+                floors: 0..255,
+                name: "Basic enemy".to_string(),
+                behavior: Box::new(RandomMovement::new()),
+                health: 30,
+                attack: 10,
+                priority: 1,
+            }],
+            entities_total: 10,
             player_stats: ConfigPlayer {
                 health: 100,
                 attack: 10,

@@ -1,9 +1,9 @@
 use super::{
-    cell::Effect,
+    cell::{Cell, Effect},
     floor::{Floor, FloorView},
 };
 use dyn_clone::{clone_trait_object, DynClone};
-use rand::Rng;
+use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg32;
 use serde::{Deserialize, Serialize};
 use std::{collections::VecDeque, fmt::Display, mem};
@@ -17,12 +17,13 @@ pub struct Position(pub usize, pub usize);
 
 /// Indica la direzione dove una entità sta guardando.\
 /// È possibile anche non guardare in nessuna direzione tramite None.
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Default, Debug, Deserialize, Serialize)]
 pub enum Direction {
     Up,
     Down,
     Left,
     Right,
+    #[default]
     None,
 }
 
@@ -89,7 +90,7 @@ impl Display for Direction {
 pub struct Entity {
     name: String,
     effects: VecDeque<Box<dyn Effect>>,
-    behavior: Box<dyn Behavior>,
+    behavior: Option<Box<dyn Behavior>>,
     pub buffer: Action,
     pub position: Position,
     pub direction: Direction,
@@ -106,7 +107,7 @@ impl Entity {
     pub fn new(name: String, health: i32, attack: i32, behavior: Box<dyn Behavior>) -> Self {
         Self {
             name,
-            behavior,
+            behavior: Some(behavior),
             position: Position(0, 0),
             attack,
             health,
@@ -164,33 +165,41 @@ impl Entity {
     /// Permette all'entità di mostrare il piano in cui si trova e di fare una mossa.\
     /// Il piano viene mostrato tramite il behavior dell'entità e successivamente viene chiesto di fare un'azione.\
     /// Dopodichè vengono calcolati tutti gli effetti che devono essere applicati all'entità.\
-    /// Nel caso in cui l'entità non sia più in vita questo metodo ritornerà false
-    /// e non permetterà all'entità di fare update.\
-    /// Nel caso in cui l'entità non riesca a fare l'update viene ritornato false.\
+    /// Nel caso in cui l'entità non sia più in vita questo metodo ritornerà None
+    /// e l' entità smetterà di esistere.\
+    /// Nel caso in cui l'entità non riesca a fare l'update viene ritornato None.\
     /// Cio significa che l'entità verrà rimossa dal gioco.
-    pub fn update(&mut self, floor: &mut Floor) -> bool {
+    pub fn update(mut self, floor: &mut Floor) -> Option<Self> {
+        let mut behavior = mem::take(&mut self.behavior).unwrap();
+
         if !self.is_alive() {
-            self.behavior.you_died(floor.get_limited_view_floor(self));
-            return false;
+            return self.die(behavior, floor);
         }
 
-        self.behavior.update(floor.get_limited_view_floor(self));
-        let action = self.compute_action(floor);
+        behavior.update(floor.get_limited_view_floor(&self));
+        let action = self.compute_action(&mut behavior, floor);
         if action.is_none() {
-            return false;
+            return None;
         }
 
         if !self.is_alive() {
-            self.behavior.you_died(floor.get_limited_view_floor(self));
-            return false;
+            return self.die(behavior, floor);
         }
 
         self.compute_effects(floor);
         if !self.is_alive() {
-            self.behavior.you_died(floor.get_limited_view_floor(self));
-            return false
+            return self.die(behavior, floor);
         }
-        true
+
+        self.behavior = Some(behavior);
+        Some(self)
+    }
+
+    /// metodo usato per la rimozione dell' entità e del suo behavior
+    fn die(self, mut behavior: Box<dyn Behavior>, floor: &Floor) -> Option<Self> {
+        let view = floor.get_limited_view_floor(&self);
+        behavior.on_death(view);
+        None
     }
 
     /// calcola gli effetti e li applica all'entità.
@@ -204,8 +213,8 @@ impl Entity {
     }
     /// prende una decisione e applica l'azione da fare
     /// L'azione compiuta viene restituita, altrimenti None
-    fn compute_action(&mut self, floor: &mut Floor) -> Option<Action> {
-        let action = self.behavior.get_next_action()?;
+    fn compute_action(&mut self, behavior: &mut Box<dyn Behavior>, floor: &mut Floor) -> Option<Action> {
+        let action = behavior.get_next_action()?;
         let action = match self.buffer {
             Action::DoNothing => action,
             _ => mem::replace(&mut self.buffer, Action::DoNothing),
@@ -236,10 +245,11 @@ impl Display for Entity {
 
 /// Azione che una qualsiasi entità può fare.
 /// L'azione DoNothing permette all'entità di saltare il turno nel caso in cui sia utile.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
 pub enum Action {
     Move(Direction),
     //Attack(Direction),
+    #[default]
     DoNothing,
 }
 
@@ -257,7 +267,7 @@ impl Action {
                 direction.move_from(&mut entity.position);
                 entity.direction = direction;
 
-                let cell = floor.get_cell(&entity.position);
+                let cell = floor.get_cell_mut(&entity.position);
                 cell.entity_over(entity);
             }
         }
@@ -283,12 +293,14 @@ pub trait Behavior: DynClone + core::fmt::Debug {
     /// In questo metodo viene passata una struttura che contiene una rappresentazione del
     /// piano semplice, avente solo delle informazioni parziali.\
     /// Questo serve a mostrare eventualmente delle possibili informazioni all'utente
-    /// o di registrare dei valori per l'algoritmo di generazione delle azioni.
-    fn update(&self, floor: FloorView);
+    /// o di registrare dei valori per l'algoritmo di generazione delle azioni.\
+    /// Non è necessario implementarla.
+    fn update(&mut self, _view: FloorView) {}
     /// Funzione che viene richiamata quando l'entità muore.\
     /// I parametri servono a far vedere un'ultima volta i dati del piano corrente all'entità
-    /// in modo che possa eventualmente fare ulteriori calcoli.
-    fn you_died(&self, floor: FloorView);
+    /// in modo che possa eventualmente fare ulteriori calcoli.\
+    /// Non è necessario implementarla.
+    fn on_death(&mut self, _view: FloorView) {}
     /// Genera una azione che poi verrà usata per l'entità associata.\
     /// L'azione può essere generata in qualunque modo: casuale, sempre la stessa,
     /// tramite interazione con console, o tramite una connessione ad un client.\
@@ -296,7 +308,7 @@ pub trait Behavior: DynClone + core::fmt::Debug {
     /// Nel caso in cui venga restituito None come valore, l'entità verrà rimossa dal gioco.\
     /// Questo viene fatto in modo che si possa avere una possibilità di rimozione del giocatore,
     /// ma anche una possibilità che alcune entità rare possano sparire.
-    fn get_next_action(&self) -> Option<Action>;
+    fn get_next_action(&mut self) -> Option<Action>;
 }
 clone_trait_object!(Behavior);
 
@@ -306,9 +318,37 @@ clone_trait_object!(Behavior);
 pub struct Immovable;
 #[typetag::serde]
 impl Behavior for Immovable {
-    fn update(&self, _floor: FloorView) {}
-    fn you_died(&self, _floor: FloorView) {}
-    fn get_next_action(&self) -> Option<Action> {
+    fn get_next_action(&mut self) -> Option<Action> {
         Some(Action::DoNothing)
+    }
+}
+
+/// Semplice implementazione di un possibile comportamento di una entità.\
+/// In questo caso l'entità si mouverà in maniera casuale evitando le caselle speciali.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RandomMovement {
+    action: Action,
+    rng: Pcg32,
+}
+impl RandomMovement {
+    pub fn new() -> Self {
+        Self {
+            action: Action::DoNothing,
+            rng: Pcg32::seed_from_u64(0),
+        }
+    }
+}
+#[typetag::serde]
+impl Behavior for RandomMovement {
+    fn update(&mut self, view: FloorView) {
+        let dir = Direction::random(&mut self.rng);
+        let mut pos = view.entity.position.clone();
+        dir.move_from(&mut pos);
+        if let Cell::Empty = view.floor.get_cell(&pos) {
+            self.action = Action::Move(dir);
+        }
+    }
+    fn get_next_action(&mut self) -> Option<Action> {
+        Some(mem::take(&mut self.action))
     }
 }

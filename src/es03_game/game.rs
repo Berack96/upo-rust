@@ -23,7 +23,7 @@ pub struct Dungeon {
 }
 
 impl Dungeon {
-    /// Crea una nuova istanza di un dungeon con le configurazioni i default
+    /// Crea una nuova istanza di un dungeon con le configurazioni di default
     pub fn new() -> Self {
         Self::new_with(Config::default())
     }

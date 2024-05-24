@@ -68,11 +68,23 @@ impl Floor {
     /// Nel caso in cui la posizione non sia all'interno del piano, essa viene modificata
     /// facendola rientrare nei limiti di esso.\
     /// Es. pos(2,3) ma il piano è di max 2 allora diventa -> pos(2,2)
-    pub fn get_cell(&mut self, pos: &Position) -> &mut Cell {
+    pub fn get_cell_mut(&mut self, pos: &Position) -> &mut Cell {
         let len = self.grid.len() - 1;
         let x = pos.0.min(len);
         let y = pos.1.min(len);
         &mut self.grid[x][y]
+    }
+
+    /// Restituisce la cella nella posizione indicata.\
+    /// Con essa si può leggere la cella senza però la possibilità di modificarla.\
+    /// Nel caso in cui la posizione non sia all'interno del piano, essa viene modificata
+    /// facendola rientrare nei limiti di esso.\
+    /// Es. pos(2,3) ma il piano è di max 2 allora diventa -> pos(2,2)
+    pub fn get_cell(&self, pos: &Position) -> &Cell {
+        let len = self.grid.len() - 1;
+        let x = pos.0.min(len);
+        let y = pos.1.min(len);
+        &self.grid[x][y]
     }
 
     /// Restituisce la posizione dell'entrata del piano.\
@@ -91,20 +103,6 @@ impl Floor {
                 })
             })
             .expect("Entrance of the floor should be inside the grid!")
-    }
-
-    /// Fa l'update di tutti i giocatori e rimuove eventualmente quelli non più in vita, restituendoli dentro un vec
-    pub fn update_players(&mut self) -> Vec<Entity> {
-        let mut next_floor = vec![];
-        for _ in 0..self.players.len() {
-            let mut player = self.players.pop_front().unwrap();
-            if player.update(self) {
-                self.players.push_back(player);
-            } else {
-                next_floor.push(player);
-            }
-        }
-        next_floor
     }
 
     /// Ritorna un eventuale giocatore che si trova sopra la cella di uscita del piano.\
@@ -130,11 +128,21 @@ impl Floor {
         }
     }
 
+    /// Fa l'update di tutti i giocatori e rimuove quelli non più in vita
+    pub fn update_players(&mut self) {
+        for _ in 0..self.players.len() {
+            let player = self.players.pop_front().unwrap();
+            if let Some(player) = player.update(self) {
+                self.players.push_back(player);
+            }
+        }
+    }
+
     /// Fa l'update di tutte le entità e rimuove eventualmente quelle non più in vita
     pub fn update_entities(&mut self) {
         for _ in 0..self.entities.len() {
-            let mut entity = self.entities.pop_front().unwrap();
-            if entity.update(self) {
+            let entity = self.entities.pop_front().unwrap();
+            if let Some(entity) = entity.update(self) {
                 self.entities.push_back(entity);
             }
         }

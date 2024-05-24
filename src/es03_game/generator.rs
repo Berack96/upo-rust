@@ -74,16 +74,20 @@ impl<'a> Generator<'a> {
         self.rand_place_effects(&mut grid);
         Floor::new(self.level, self.rng, vec![], grid)
     }
+
+    /// todo!() docs
+    fn rand_place_entities(&mut self, grid: &mut Vec<Vec<Cell>>) {
+        todo!()
+    }
     /// piazza gli effetti della confgurazione in modo casuale su tutto il piano.\
     /// essi vengono piazzati solamente sulle celle Empty
     fn rand_place_effects(&mut self, grid: &mut Vec<Vec<Cell>>) {
-        let total = self.config.effects_total;
-        let original = &self.config.effects;
-        let effects = Self::vec_filter(original, |val| val.floors.contains(&self.level));
+        let effects = vec_filter(&self.config.effects, |e| {
+            e.floors.contains(&self.level).then(|| (e.priority, e))
+        });
 
-        for _ in 0..total {
-            let index = self.rng.gen_range(0..effects.len());
-            let effect = effects[index].effect.clone();
+        for _ in 0..self.config.effects_total {
+            let effect = vec_get_sample(&effects, &mut self.rng).effect.clone();
             let cell = Cell::Special(effect);
             self.rand_place(grid, cell, 0..self.size, 0..self.size);
         }
@@ -106,14 +110,29 @@ impl<'a> Generator<'a> {
             }
         }
     }
-    /// crea una vista del vettore passato in input dopo aver applicato la funzione di filtro
-    fn vec_filter<T: Clone>(original: &Vec<T>, filter: impl Fn(&T) -> bool) -> Vec<T> {
-        original
-            .clone()
-            .into_iter()
-            .filter_map(|val| filter(&val).then(|| val))
-            .collect()
-    }
+}
+
+/// crea una vista del vettore passato in input dopo aver applicato la funzione di filtro
+pub fn vec_filter<T, F>(original: &Vec<T>, filter: F) -> Vec<(f32, &T)>
+where
+    F: FnMut(&T) -> Option<(u32, &T)>,
+{
+    let temp = original.iter().filter_map(filter).collect::<Vec<_>>();
+    let max = temp.iter().fold(0, |a, b| a.max(b.0)) + 1;
+    let total = temp.iter().map(|(p, _)| (max - *p) as f32).sum::<f32>();
+    let mut accum = 0.0;
+    temp.into_iter()
+        .map(|(p, item)| {
+            accum += (max - p) as f32 / total;
+            (accum, item)
+        })
+        .collect()
+}
+
+/// todo!() docs
+pub fn vec_get_sample<'a, T>(vec: &Vec<(f32, &'a T)>, rng: &mut Pcg32) -> &'a T {
+    let sample = rng.gen_range(0.0..1.0);
+    vec.iter().filter(|(p, _)| *p >= sample).next().unwrap().1
 }
 
 /// Utile per la generazione del labirinto.\
