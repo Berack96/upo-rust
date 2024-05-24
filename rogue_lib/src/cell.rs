@@ -147,6 +147,11 @@ pub struct TurnBasedDamage {
     time: u8,
     damage: i32,
 }
+impl TurnBasedDamage {
+    pub fn new(time: u8, damage: i32) -> Self {
+        Self { time, damage }
+    }
+}
 #[typetag::serde]
 impl Effect for TurnBasedDamage {
     fn is_persistent(&self) -> bool {
@@ -155,10 +160,12 @@ impl Effect for TurnBasedDamage {
     fn apply_to(&self, entity: &mut Entity, _floor: &mut Floor) {
         if self.time > 0 {
             entity.apply_damage(self.damage);
-            entity.add_effect(Box::new(Self {
-                time: self.time - 1,
-                damage: self.damage,
-            }));
+            if self.time > 1 {
+                entity.add_effect(Box::new(Self {
+                    time: self.time - 1,
+                    damage: self.damage,
+                }));
+            }
         }
     }
 }

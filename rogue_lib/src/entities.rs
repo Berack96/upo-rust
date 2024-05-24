@@ -127,6 +127,13 @@ impl Entity {
         self.effects.push_back(effect);
     }
 
+    /// Permette di vedere tutti gli effetti che in questo momento sono applicati all'entità.\
+    /// Gli effetti qui elencati sono in uno stato di attesa prima di essere effettivamente
+    /// applicati tremite la funzione update.
+    pub fn get_effects(& self) -> impl Iterator<Item = &Box<dyn Effect>> {
+        self.effects.iter()
+    }
+
     /// Indica se l'entità è considerata ancora in gioco o meno.\
     /// Per far si che l'entità non sia più in gioco bisobna far arrivare la vita a 0.
     /// Nota: una entità con vita negativa è considerata "viva"
