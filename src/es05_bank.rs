@@ -71,22 +71,20 @@ impl BankAccount {
 
     pub fn deposit(&mut self, amount: f32) {
         if amount > 0.0 {
-            self.balance += amount;
+            self.state.clone().deposit(self, amount);
             self.set_state();
         }
     }
 
     pub fn withdraw(&mut self, amount: f32) {
         if amount > 0.0 {
-            let state = Rc::clone(&mut self.state);
-            state.withdraw(self, amount);
+            self.state.clone().withdraw(self, amount);
             self.set_state();
         }
     }
 
     pub fn pay_interest(&mut self) {
-        let state = Rc::clone(&mut self.state);
-        state.pay_interest(self);
+        self.state.clone().pay_interest(self);
         self.set_state();
     }
 
@@ -110,16 +108,16 @@ pub mod states {
     use super::BankAccount;
 
     pub trait AccountState: Debug {
-        fn withdraw(&self, account: &mut BankAccount, amount: f32);
-        fn pay_interest(&self, account: &mut BankAccount);
+        fn deposit(&self, account: &mut BankAccount, amount: f32) {
+            account.balance += amount;
+        }
+        fn withdraw(&self, _account: &mut BankAccount, _amount: f32) {}
+        fn pay_interest(&self, _account: &mut BankAccount) {}
     }
 
     #[derive(Debug)]
     pub struct Red;
-    impl AccountState for Red {
-        fn withdraw(&self, _account: &mut BankAccount, _amount: f32) {}
-        fn pay_interest(&self, _account: &mut BankAccount) {}
-    }
+    impl AccountState for Red {}
 
     #[derive(Debug)]
     pub struct Silver;
@@ -127,7 +125,6 @@ pub mod states {
         fn withdraw(&self, account: &mut BankAccount, amount: f32) {
             account.balance -= amount;
         }
-        fn pay_interest(&self, _account: &mut BankAccount) {}
     }
 
     #[derive(Debug)]
