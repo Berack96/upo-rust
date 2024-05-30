@@ -35,7 +35,7 @@ fn test_cell_basic() {
     assert_eq!(entity.position, Position(10, 10));
     assert_eq!(entity.direction, Direction::Up);
 
-    Cell::Entance.entity_over(&mut entity);
+    Cell::Entrance.entity_over(&mut entity);
     assert_eq!(entity.position, Position(10, 10));
     assert_eq!(entity.direction, Direction::Up);
 
@@ -48,7 +48,7 @@ fn test_cell_basic() {
     assert_eq!(entity.direction, Direction::Down);
 
     assert_eq!(Cell::Empty.as_char(), ' ');
-    assert_eq!(Cell::Entance.as_char(), ' ');
+    assert_eq!(Cell::Entrance.as_char(), ' ');
     assert_eq!(Cell::Exit.as_char(), '¤');
     assert_eq!(Cell::Wall.as_char(), '█');
 }
@@ -249,6 +249,97 @@ fn test_entity_basic_action() {
     assert_eq!(entity.position, Position(9, 11));
     assert_eq!(entity.direction, Direction::None);
     assert!(matches!(entity.buffer, Action::DoNothing));
+}
+
+#[test]
+#[should_panic]
+fn test_floor_insert_player_panic() {
+    let mut floor = get_basic_floor();
+    let player = get_basic_entity();
+    floor.add_player(player);
+}
+
+#[test]
+fn test_floor_entrance_exit_player() {
+    let mut floor = get_basic_floor();
+    assert_eq!(floor.get_level(), 0);
+    assert_eq!(floor.get_size(), 20);
+    assert!(matches!(floor.get_player_at_exit(), None));
+
+    assert!(matches!(floor.get_cell(&Position(10, 10)), Cell::Empty));
+    *floor.get_cell_mut(&Position(10, 10)) = Cell::Entrance;
+    assert!(matches!(floor.get_cell(&Position(10, 10)), Cell::Entrance));
+
+    let player = get_basic_entity();
+    floor.add_player(player);
+
+    assert!(matches!(floor.get_player_at_exit(), None));
+    assert!(matches!(floor.get_cell(&Position(10, 10)), Cell::Entrance));
+    *floor.get_cell_mut(&Position(10, 10)) = Cell::Exit;
+    assert!(matches!(floor.get_cell(&Position(10, 10)), Cell::Exit));
+    assert!(matches!(floor.get_player_at_exit(), Some(_)));
+    assert!(matches!(floor.get_player_at_exit(), None));
+    assert!(matches!(floor.get_cell(&Position(10, 10)), Cell::Exit));
+}
+
+#[test]
+fn test_floor_entities() {
+    let rng = Pcg32::seed_from_u64(0);
+    let entities = vec![
+        Entity::new("1".to_string(), 110, 90, Box::new(Immovable)),
+        Entity::new("2".to_string(), 120, 80, Box::new(Immovable)),
+        Entity::new("3".to_string(), 130, 70, Box::new(Immovable)),
+        Entity::new("4".to_string(), 140, 60, Box::new(Immovable)),
+    ];
+
+    let floor = Floor::new(0, rng, entities, vec![vec![Cell::Empty; 20]; 20]);
+    let mut iter = floor.get_all_entities();
+
+    let entity = iter.next();
+    assert!(matches!(entity, Some(_)));
+    assert_eq!(entity.unwrap().get_name(), &"1");
+    assert_eq!(entity.unwrap().get_health(), 110);
+    assert_eq!(entity.unwrap().get_health_max(), 110);
+
+    let entity = iter.next();
+    assert!(matches!(entity, Some(_)));
+    assert_eq!(entity.unwrap().get_name(), &"2");
+    assert_eq!(entity.unwrap().get_health(), 120);
+    assert_eq!(entity.unwrap().get_health_max(), 120);
+
+    let entity = iter.next();
+    assert!(matches!(entity, Some(_)));
+    assert_eq!(entity.unwrap().get_name(), &"3");
+    assert_eq!(entity.unwrap().get_health(), 130);
+    assert_eq!(entity.unwrap().get_health_max(), 130);
+
+    let entity = iter.next();
+    assert!(matches!(entity, Some(_)));
+    assert_eq!(entity.unwrap().get_name(), &"4");
+    assert_eq!(entity.unwrap().get_health(), 140);
+    assert_eq!(entity.unwrap().get_health_max(), 140);
+
+    let entity = iter.next();
+    assert!(matches!(entity, None));
+}
+
+#[test]
+fn test_game_initial_config() {
+    let mut game = rogue_lib::game::Dungeon::new();
+
+    assert!(!game.has_players());
+    game.add_player("Player".to_string(), Box::new(Immovable));
+    assert!(game.has_players());
+
+    let floor = game.get_floor(0);
+    assert_eq!(floor.get_level(), 0);
+
+    let player = floor.get_all_entities().next();
+    assert!(matches!(player, Some(_)));
+    assert_eq!(player.unwrap().get_name(), &"Player");
+
+    let entrance = floor.get_entrance();
+    assert_eq!(entrance, player.unwrap().position);
 }
 
 #[test]

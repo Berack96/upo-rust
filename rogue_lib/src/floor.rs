@@ -89,13 +89,13 @@ impl Floor {
 
     /// Restituisce la posizione dell'entrata del piano.\
     /// Utile come spawn per quando i giocatori arrivano al piano.
-    pub fn get_entrance(&mut self) -> Position {
+    pub fn get_entrance(&self) -> Position {
         self.grid
             .iter()
             .enumerate()
             .find_map(|(x, vec)| {
                 vec.iter().enumerate().find_map(|(y, cell)| {
-                    if let Cell::Entance = cell {
+                    if let Cell::Entrance = cell {
                         Some(Position(x, y))
                     } else {
                         None

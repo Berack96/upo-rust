@@ -108,7 +108,7 @@ impl ConsoleInput {
         let mut term = console::Term::stdout();
         let _ = term.clear_screen();
         let _ = term.write_fmt(format_args!(
-            "{}{}\n{other}\n",
+            "{}{}\n{other}",
             Self::floor_as_string(&floor),
             Self::entity_as_string(floor.entity),
         ));

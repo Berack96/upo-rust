@@ -13,7 +13,7 @@ use std::fmt::Display;
 /// gestisce le varie casistiche.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum Cell {
-    Entance,
+    Entrance,
     Exit,
     Special(Box<dyn Effect>),
     Wall,
@@ -46,7 +46,7 @@ impl Cell {
     /// può essere utilizzata per vedere il valore e mostrarlo a terminale.
     pub fn as_char(&self) -> char {
         match self {
-            Cell::Entance => ' ',
+            Cell::Entrance => ' ',
             Cell::Exit => '¤',
             Cell::Special(effect) => effect.as_char(),
             Cell::Wall => '█',

@@ -7,6 +7,7 @@ use super::{
     },
     floor::Floor,
 };
+use crate::entities::Entity;
 use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg32;
 use std::{
@@ -69,15 +70,43 @@ impl<'a> Generator<'a> {
         let index = gen.get_random_room_index();
         let exit = gen.get_room_ranges(index);
 
-        self.rand_place(&mut grid, Cell::Entance, entrance.0, entrance.1);
-        self.rand_place(&mut grid, Cell::Exit, exit.0, exit.1);
+        let pos = self.rand_empty_cell_pos(&mut grid, entrance.0, entrance.1);
+        grid[pos.0][pos.1] = Cell::Entrance;
+        let pos = self.rand_empty_cell_pos(&mut grid, exit.0, exit.1);
+        grid[pos.0][pos.1] = Cell::Exit;
+
         self.rand_place_effects(&mut grid);
-        Floor::new(self.level, self.rng, vec![], grid)
+        let entities = self.rand_place_entities(&mut grid);
+
+        Floor::new(self.level, self.rng, entities, grid)
     }
 
     /// todo!() docs
-    fn rand_place_entities(&mut self, grid: &mut Vec<Vec<Cell>>) {
-        todo!()
+    fn rand_place_entities(&mut self, grid: &mut Vec<Vec<Cell>>) -> Vec<Entity> {
+        let entities = vec_filter(&self.config.entities, |e| {
+            e.floors.contains(&self.level).then(|| (e.priority, e))
+        });
+
+        let mut result: Vec<Entity> = vec![];
+        for _ in 0..self.config.entities_total {
+            let config = vec_get_sample(&entities, &mut self.rng).clone();
+            let mut entity = Entity::new(
+                config.name.clone(),
+                config.health,
+                config.attack,
+                config.behavior.clone(),
+            );
+
+            loop {
+                let pos = self.rand_empty_cell_pos(grid, 0..self.size, 0..self.size);
+                if !result.iter().any(|e| e.position == pos) {
+                    entity.position = pos;
+                    result.push(entity);
+                    break;
+                }
+            }
+        }
+        result
     }
     /// piazza gli effetti della confgurazione in modo casuale su tutto il piano.\
     /// essi vengono piazzati solamente sulle celle Empty
@@ -89,15 +118,16 @@ impl<'a> Generator<'a> {
         for _ in 0..self.config.effects_total {
             let effect = vec_get_sample(&effects, &mut self.rng).effect.clone();
             let cell = Cell::Special(effect);
-            self.rand_place(grid, cell, 0..self.size, 0..self.size);
+            let pos = self.rand_empty_cell_pos(grid, 0..self.size, 0..self.size);
+            grid[pos.0][pos.1] = cell;
         }
     }
     /// piazza una cella in un punto casuale del piano.\
     /// il metodo contiuna a provare a piazzare la cella finche non trova una cella Empty.
-    fn rand_place(
+    /// todo!() docs
+    fn rand_empty_cell_pos(
         &mut self,
         grid: &mut Vec<Vec<Cell>>,
-        cell: Cell,
         range_x: Range<usize>,
         range_y: Range<usize>,
     ) -> Position {
@@ -105,7 +135,6 @@ impl<'a> Generator<'a> {
             let x = self.rng.gen_range(range_x.clone());
             let y = self.rng.gen_range(range_y.clone());
             if let Cell::Empty = grid[x][y] {
-                grid[x][y] = cell;
                 return Position(x, y);
             }
         }
