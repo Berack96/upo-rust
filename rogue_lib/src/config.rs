@@ -104,7 +104,7 @@ impl Default for Config {
                 floors: 0..255,
                 name: "Basic enemy".to_string(),
                 behavior: Box::new(RandomMovement::new()),
-                health: 30,
+                health: 10,
                 attack: 10,
                 priority: 1,
             }],

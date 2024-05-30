@@ -105,6 +105,25 @@ impl Floor {
             .expect("Entrance of the floor should be inside the grid!")
     }
 
+    /// Permette di prendere l'entità o il giocatore che si trova alla posizione indicata.\
+    /// Nel caso in cui non ci sia nessuna entità nella posizione, allora
+    /// verrà ritornato None.
+    pub fn get_entity_at(&mut self, position: &Position) -> Option<&mut Entity> {
+        let entity = self
+            .entities
+            .iter_mut()
+            .filter(|e| e.position == *position)
+            .next();
+        if let None = entity {
+            self.players
+                .iter_mut()
+                .filter(|e| e.position == *position)
+                .next()
+        } else {
+            entity
+        }
+    }
+
     /// Ritorna un eventuale giocatore che si trova sopra la cella di uscita del piano.\
     /// Nel caso in cui non ci siano giocatori sopra, questo metodo ritornerà None.
     pub fn get_player_at_exit(&mut self) -> Option<Entity> {
@@ -132,7 +151,12 @@ impl Floor {
     pub fn update_players(&mut self) {
         for _ in 0..self.players.len() {
             let player = self.players.pop_front().unwrap();
-            if let Some(player) = player.update(self) {
+            let previous = player.position;
+
+            if let Some(mut player) = player.update(self) {
+                if self.collisions(&player.position) > 0 {
+                    player.position = previous;
+                }
                 self.players.push_back(player);
             }
         }
@@ -142,7 +166,12 @@ impl Floor {
     pub fn update_entities(&mut self) {
         for _ in 0..self.entities.len() {
             let entity = self.entities.pop_front().unwrap();
-            if let Some(entity) = entity.update(self) {
+            let previous = entity.position;
+
+            if let Some(mut entity) = entity.update(self) {
+                if self.collisions(&entity.position) > 0 {
+                    entity.position = previous;
+                }
                 self.entities.push_back(entity);
             }
         }

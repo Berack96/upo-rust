@@ -3,8 +3,7 @@ use super::{
     floor::{Floor, FloorView},
 };
 use dyn_clone::{clone_trait_object, DynClone};
-use rand::{Rng, SeedableRng};
-use rand_pcg::Pcg32;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::{collections::VecDeque, fmt::Display, mem};
 
@@ -57,7 +56,7 @@ impl Direction {
     /// Restituisce una direzione casuale a partire da un generatore.\
     /// La direzione viene generata con una distribuzione uniforme, ovvero non
     /// c'è una direzione preferita o con più probabilità.
-    pub fn random(rng: &mut Pcg32) -> Self {
+    pub fn random(rng: &mut impl Rng) -> Self {
         match rng.gen_range(0..5) {
             0 => Direction::Up,
             1 => Direction::Down,
@@ -130,7 +129,7 @@ impl Entity {
     /// Permette di vedere tutti gli effetti che in questo momento sono applicati all'entità.\
     /// Gli effetti qui elencati sono in uno stato di attesa prima di essere effettivamente
     /// applicati tremite la funzione update.
-    pub fn get_effects(& self) -> impl Iterator<Item = &Box<dyn Effect>> {
+    pub fn get_effects(&self) -> impl Iterator<Item = &Box<dyn Effect>> {
         self.effects.iter()
     }
 
@@ -220,8 +219,12 @@ impl Entity {
     }
     /// prende una decisione e applica l'azione da fare
     /// L'azione compiuta viene restituita, altrimenti None
-    fn compute_action(&mut self, behavior: &mut Box<dyn Behavior>, floor: &mut Floor) -> Option<Action> {
-        let action = behavior.get_next_action()?;
+    fn compute_action(
+        &mut self,
+        behavior: &mut Box<dyn Behavior>,
+        floor: &mut Floor,
+    ) -> Option<Action> {
+        let action = behavior.get_next_action(self)?;
         let action = match self.buffer {
             Action::DoNothing => action,
             _ => mem::replace(&mut self.buffer, Action::DoNothing),
@@ -255,7 +258,7 @@ impl Display for Entity {
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
 pub enum Action {
     Move(Direction),
-    //Attack(Direction),
+    Attack(Direction),
     #[default]
     DoNothing,
 }
@@ -276,6 +279,14 @@ impl Action {
 
                 let cell = floor.get_cell_mut(&entity.position);
                 cell.entity_over(entity);
+            }
+            Action::Attack(direction) => {
+                let mut pos = entity.position;
+                direction.move_from(&mut pos);
+
+                if let Some(other) = floor.get_entity_at(&pos) {
+                    other.apply_damage(entity.attack);
+                }
             }
         }
     }
@@ -308,14 +319,14 @@ pub trait Behavior: DynClone + core::fmt::Debug {
     /// in modo che possa eventualmente fare ulteriori calcoli.\
     /// Non è necessario implementarla.
     fn on_death(&mut self, _view: FloorView) {}
-    /// Genera una azione che poi verrà usata per l'entità associata.\
+    /// Genera un'azione che poi verrà usata per l'entità associata.\
     /// L'azione può essere generata in qualunque modo: casuale, sempre la stessa,
     /// tramite interazione con console, o tramite una connessione ad un client.\
     /// \
     /// Nel caso in cui venga restituito None come valore, l'entità verrà rimossa dal gioco.\
     /// Questo viene fatto in modo che si possa avere una possibilità di rimozione del giocatore,
     /// ma anche una possibilità che alcune entità rare possano sparire.
-    fn get_next_action(&mut self) -> Option<Action>;
+    fn get_next_action(&mut self, entity: &Entity) -> Option<Action>;
 }
 clone_trait_object!(Behavior);
 
@@ -325,7 +336,7 @@ clone_trait_object!(Behavior);
 pub struct Immovable;
 #[typetag::serde]
 impl Behavior for Immovable {
-    fn get_next_action(&mut self) -> Option<Action> {
+    fn get_next_action(&mut self, _entity: &Entity) -> Option<Action> {
         Some(Action::DoNothing)
     }
 }
@@ -335,27 +346,26 @@ impl Behavior for Immovable {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RandomMovement {
     action: Action,
-    rng: Pcg32,
 }
 impl RandomMovement {
     pub fn new() -> Self {
-        Self {
-            action: Action::DoNothing,
-            rng: Pcg32::seed_from_u64(0),
-        }
+        let action = Action::default();
+        Self { action }
     }
 }
 #[typetag::serde]
 impl Behavior for RandomMovement {
     fn update(&mut self, view: FloorView) {
-        let dir = Direction::random(&mut self.rng);
         let mut pos = view.entity.position.clone();
+        let mut rng = rand::rngs::ThreadRng::default();
+        let dir = Direction::random(&mut rng);
+
         dir.move_from(&mut pos);
         if let Cell::Empty = view.floor.get_cell(&pos) {
             self.action = Action::Move(dir);
         }
     }
-    fn get_next_action(&mut self) -> Option<Action> {
+    fn get_next_action(&mut self, _entity: &Entity) -> Option<Action> {
         Some(mem::take(&mut self.action))
     }
 }

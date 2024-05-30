@@ -159,7 +159,7 @@ where
 }
 
 /// todo!() docs
-pub fn vec_get_sample<'a, T>(vec: &Vec<(f32, &'a T)>, rng: &mut Pcg32) -> &'a T {
+pub fn vec_get_sample<'a, T>(vec: &Vec<(f32, &'a T)>, rng: &mut impl Rng) -> &'a T {
     let sample = rng.gen_range(0.0..1.0);
     vec.iter().filter(|(p, _)| *p >= sample).next().unwrap().1
 }

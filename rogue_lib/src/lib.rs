@@ -76,9 +76,9 @@ pub fn box_of(
     let correction = if 2 * len + title.len() < size { 1 } else { 0 };
 
     std::iter::once("╔".to_string())
-    .chain(std::iter::repeat("═".to_string()).take(len + 1))
-    .chain(std::iter::once(title))
-    .chain(std::iter::repeat("═".to_string()).take(len + 1 + correction))
+        .chain(std::iter::repeat("═".to_string()).take(len + 1))
+        .chain(std::iter::once(title))
+        .chain(std::iter::repeat("═".to_string()).take(len + 1 + correction))
         .chain(std::iter::once("╗\n".to_string()))
         .chain(iter.map(|string| {
             std::iter::once("║ ".to_string())
@@ -164,18 +164,34 @@ impl Behavior for ConsoleInput {
     fn on_death(&mut self, floor: FloorView) {
         self.print_floor(floor, "YOU DIED!".to_string());
     }
-    fn get_next_action(&mut self) -> Option<Action> {
+    fn get_next_action(&mut self, entity: &Entity) -> Option<Action> {
+        let prompt = "Insert your action [? for help]: ";
         let mut term = console::Term::stdout();
-        let _ = term.write("Insert your action [wasd or space for nothing]: ".as_bytes());
+        let _ = term.write(prompt.as_bytes());
 
         loop {
             if let Ok(ch) = term.read_char() {
                 match ch {
-                    ' ' => return Some(Action::DoNothing),
+                    ' ' => return Some(Action::Attack(entity.direction)),
+                    'z' => return Some(Action::DoNothing),
                     'w' => return Some(Action::Move(Direction::Up)),
                     'a' => return Some(Action::Move(Direction::Left)),
                     's' => return Some(Action::Move(Direction::Down)),
                     'd' => return Some(Action::Move(Direction::Right)),
+                    'q' => return None,
+                    '?' => {
+                        let _ = term.write_line("");
+                        let _ = term.write_line("[wasd]  => for movement");
+                        let _ = term.write_line("[space] => for attacking the enemy in front");
+                        let _ = term.write_line("[z]     => for doing nothing");
+                        let _ = term.write_line("[q]     => for exit the game");
+                        let _ = term.write("Press ANY button to continue...".as_bytes());
+                        let _ = term.read_char();
+                        let _ = term.clear_line();
+                        let _ = term.clear_last_lines(4); // this number is from the previous message (4 total lines of help)
+                        let _ = term.move_cursor_up(1);
+                        let _ = term.move_cursor_right(prompt.len());
+                    }
                     _ => (),
                 }
             }
