@@ -92,63 +92,52 @@ impl<T: Copy> LinkedList<T> {
 
     pub fn push_front(&mut self, element: T) {
         let element = Node::new(element).as_memref();
-        if let Some(head) = self.head.as_ref() {
-            Node::get(head).prev = Some(element.clone());
-            Node::get(&element).next = Some(head.clone());
-        }
-        if let None = self.tail.as_ref() {
+        if let Some(head) = self.head.take() {
+            Node::get(&head).prev = Some(element.clone());
+            Node::get(&element).next = Some(head);
+        } else {
             self.tail = Some(element.clone());
         }
 
-        self.head = Some(element.clone());
+        self.head = Some(element);
         self.size += 1;
     }
     pub fn push_back(&mut self, element: T) {
         let element = Node::new(element).as_memref();
-        if let Some(tail) = self.tail.as_ref() {
-            Node::get(tail).next = Some(element.clone());
-            Node::get(&element).prev = Some(tail.clone());
-        }
-        if let None = self.tail.as_ref() {
+        if let Some(tail) = self.tail.take() {
+            Node::get(&tail).next = Some(element.clone());
+            Node::get(&element).prev = Some(tail);
+        } else {
             self.head = Some(element.clone());
         }
 
-        self.tail = Some(element.clone());
+        self.tail = Some(element);
         self.size += 1;
     }
 
     pub fn pop_front(&mut self) -> Option<T> {
-        self.pop(true)
+        if let Some(node) = self.head.take() {
+            let node = Node::get(&node);
+            self.head = node.next.clone();
+
+            match self.head.as_ref() {
+                Some(other) => Node::get(other).prev = None,
+                _ => self.tail = None,
+            }
+
+            self.size -= 1;
+            return Some(node.element);
+        }
+        None
     }
     pub fn pop_back(&mut self) -> Option<T> {
-        self.pop(false)
-    }
-    fn pop(&mut self, from_head: bool) -> Option<T> {
-        let ptr = if from_head {
-            &mut self.head
-        } else {
-            &mut self.tail
-        };
-
-        if let Some(node) = ptr.clone() {
+        if let Some(node) = self.tail.take() {
             let node = Node::get(&node);
+            self.tail = node.prev.clone();
 
-            let other = if from_head {
-                node.next.clone()
-            } else {
-                node.prev.clone()
-            };
-
-            if let Some(node) = other.clone() {
-                *ptr = other;
-                if from_head {
-                    Node::get(&node).prev = None;
-                } else {
-                    Node::get(&node).next = None;
-                }
-            } else {
-                self.head = None;
-                self.tail = None;
+            match self.tail.as_ref() {
+                Some(other) => Node::get(other).next = None,
+                _ => self.head = None,
             }
 
             self.size -= 1;
@@ -158,27 +147,19 @@ impl<T: Copy> LinkedList<T> {
     }
 
     pub fn get_front(&self) -> Option<T> {
-        match self.head.clone() {
-            Some(head) => Some(Node::get(&head).element),
-            _ => None,
-        }
+        self.head.clone().and_then(|h| Some(Node::get(&h).element))
     }
     pub fn get_back(&self) -> Option<T> {
-        match self.tail.clone() {
-            Some(tail) => Some(Node::get(&tail).element),
-            _ => None,
-        }
+        self.tail.clone().and_then(|t| Some(Node::get(&t).element))
     }
 
     pub fn get(&self, n: i32) -> Option<T> {
-        if self.size > 0 {
-            let index = n + if n < 0 { self.size as i32 } else { 0 };
-            if let Some(node) = self.find(index) {
-                return Some(Node::get(&node).element);
-            }
+        let index = n + if n < 0 { self.size as i32 } else { 0 };
+        if let Some(node) = self.find(index) {
+            Some(Node::get(&node).element)
+        } else {
+            None
         }
-
-        None
     }
 
     fn find(&self, index: i32) -> Pointer<Node<T>> {
@@ -191,18 +172,18 @@ impl<T: Copy> LinkedList<T> {
         let from_head = index <= delta_back;
 
         let node = if from_head { &self.head } else { &self.tail };
-        let index = if from_head { index } else { delta_back };
-        Self::find_node(node, index, from_head)
-    }
-    fn find_node(node: &Pointer<Node<T>>, index: usize, from_head: bool) -> Pointer<Node<T>> {
-        if let Some(node) = node {
-            return if index == 0 {
-                Some(node.clone())
-            } else {
-                let node = node.as_ref().borrow();
-                let node = if from_head { &node.next } else { &node.prev };
-                Self::find_node(node, index - 1, from_head)
-            };
+        let mut node = node.clone();
+        let mut index = if from_head { index } else { delta_back };
+
+        while let Some(curr) = node {
+            if index == 0 {
+                return Some(curr.clone());
+            }
+
+            let curr = curr.as_ref().borrow();
+            let curr = if from_head { &curr.next } else { &curr.prev };
+            node = curr.clone();
+            index -= 1;
         }
         None
     }
