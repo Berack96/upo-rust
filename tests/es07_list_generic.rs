@@ -185,3 +185,27 @@ fn test_get() {
     assert_eq!(None, list.get(-1));
     assert_eq!(0, list.len());
 }
+
+#[derive(PartialEq, Debug)]
+struct Test(u32);
+
+#[test]
+fn test_struct() {
+    let mut list = LinkedList::new();
+
+    list.push_back(Test(50));
+    assert_eq!(Some(Test(50)), list.pop_front());
+    assert_eq!(None, list.pop_front());
+    assert_eq!(None, list.pop_back());
+
+    list.push_back(Test(10));
+    list.push_back(Test(20));
+    list.push_back(Test(30));
+    list.push_back(Test(40));
+    assert_eq!(Some(Test(10)), list.pop_front());
+    assert_eq!(Some(Test(40)), list.pop_back());
+    assert_eq!(Some(Test(30)), list.pop_back());
+    assert_eq!(Some(Test(20)), list.pop_front());
+    assert_eq!(None, list.pop_front());
+    assert_eq!(None, list.pop_back());
+}
