@@ -142,6 +142,9 @@ impl<T> LinkedList<T> {
             }
 
             self.size -= 1;
+            // Non avessi usato Option<T> avrei dovuto usare unsafe { mem::zeroed::<T>() }
+            // ma siccome ha problemi con possibili implementazioni di T (vedasi Drop trait)
+            // ho scelto la via più safe anche se può occupare un byte in più di memoria
             mem::take(&mut node.element)
         } else {
             None
