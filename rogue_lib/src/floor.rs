@@ -206,7 +206,10 @@ pub struct FloorView<'a> {
     pub floor: &'a Floor,
 }
 
-/// todo!() add docs
+/// Struttura di mezzo usata per far visualizzare una cella e
+/// l'eventuale entità che si trova sopra.\
+/// Questa truttura viene usata solamente per prendere i valori in modo read-only
+/// e viene utilizzata da FloorView nel metodo get_grid.
 pub struct CellView<'a> {
     pub position: Position,
     pub entity: Option<&'a Entity>,

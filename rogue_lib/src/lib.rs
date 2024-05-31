@@ -61,7 +61,12 @@ pub fn run_console(player: String, seed: u64) {
     }
 }
 
-/// todo!() add docs
+/// Permette di aggiungere all'iteratore passato in input una box
+/// intesa come una cornice attorno alle stringhe passate.\
+/// Questa funzione è utile nel casoin cui le stringhe generate dall'iteratore
+/// abbiano tutte la stessa lunghezza.\
+/// La cornice generata sarà composta dai seguenti caratteri: ║ ═ ╔ ╗ ╚ ╝.\
+/// Eventualmente si può passare un titolo da aggiungere in cima alla cornice.
 pub fn box_of(
     size: usize,
     title: String,
@@ -91,10 +96,13 @@ pub fn box_of(
         .chain(std::iter::once("╝\n".to_string()))
 }
 
+// list of colors and other formatting thigy
+// https://misc.flogisoft.com/bash/tip_colors_and_formatting
+// https://gist.github.com/JBlond/2fea43a3049b38287e5e9cefc87b2124
 const COLOR_RESET: &str = "\x1b[0m";
 const COLOR_EFFECT: &str = "\x1b[95m";
 const COLOR_ENEMY: &str = "\x1b[38;5;1m";
-const COLOR_PLAYER: &str = "\x1b[38;5;166m";
+const COLOR_PLAYER: &str = "\x1b[38;5;208m";
 const COLOR_PLAYER_HEALTH: &str = "\x1b[31m";
 
 /// Implementazione di una possibile interfaccia console.\
@@ -103,7 +111,8 @@ const COLOR_PLAYER_HEALTH: &str = "\x1b[31m";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConsoleInput;
 impl ConsoleInput {
-    /// todo!() add docs
+    /// Stampa il piano passato in input.\
+    /// Verranno usate altre funzioni di appoggio per formattare al meglio gli oggetti passati.
     fn print_floor(&self, floor: FloorView, other: String) {
         let mut term = console::Term::stdout();
         let _ = term.clear_screen();
@@ -113,7 +122,8 @@ impl ConsoleInput {
             Self::entity_as_string(floor.entity),
         ));
     }
-    /// todo!() add docs
+    /// Permette di prendere una stringa con le informazioni dell'entità.\
+    /// Alcune di esse sono il nome, la vita massima e quanto ne rimane sottoforma di HP bar.
     fn entity_as_string(entity: &Entity) -> String {
         let times = 20;
         let health_bar = (entity.get_health() * times) / entity.get_health_max();
@@ -127,7 +137,9 @@ impl ConsoleInput {
             entity.get_health_max()
         )
     }
-    /// todo!() add docs
+    /// Permette di prendere una stringa con le informazioni del piano.\
+    /// Il risultato sarà una vista del piano con raggio 5 (scelto arbitrariamente),
+    /// e che quindi restituirà una porzione di campo 10x10 evidenziando eventuali celle o entità.
     fn floor_as_string(floor: &FloorView) -> String {
         let view = 5;
         let size = (2 * view) * 3;
@@ -186,11 +198,11 @@ impl Behavior for ConsoleInput {
                         let _ = term.write_line("[z]     => for doing nothing");
                         let _ = term.write_line("[q]     => for exit the game");
                         let _ = term.write("Press ANY button to continue...".as_bytes());
-                        let _ = term.read_char();
-                        let _ = term.clear_line();
+                        let _ = term.read_char(); // waiting for user acknowledgment
+                        let _ = term.clear_line(); // clear line "press button..."
                         let _ = term.clear_last_lines(4); // this number is from the previous message (4 total lines of help)
-                        let _ = term.move_cursor_up(1);
-                        let _ = term.move_cursor_right(prompt.len());
+                        let _ = term.move_cursor_up(1); // moving up since the first write_line put me down by one
+                        let _ = term.move_cursor_right(prompt.len()); // moving at the end of the prompt
                     }
                     _ => (),
                 }

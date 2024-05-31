@@ -346,12 +346,12 @@ fn test_game_initial_config() {
 fn test_generator_priority() {
     let mut vec = vec![(1_u32, &"a"), (3, &"b"), (2, &"c")].into_iter();
     let vec1 = vec!["", "", ""];
-    let vec = rogue_lib::generator::vec_filter(&vec1, |_| vec.next());
+    let prob = rogue_lib::generator::ProbVec::new(&vec1, |_| vec.next());
     let mut sum: std::collections::HashMap<&str, u32> = std::collections::HashMap::new();
     let mut rng = <rand_pcg::Pcg32 as rand::SeedableRng>::seed_from_u64(0);
     let tot = 600000;
     for _ in 0..tot {
-        let sample = rogue_lib::generator::vec_get_sample(&vec, &mut rng);
+        let sample = prob.sample(&mut rng);
         let val = sum.entry(*sample).or_default();
         *val += 1;
     }

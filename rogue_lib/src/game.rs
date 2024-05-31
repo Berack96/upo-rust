@@ -92,7 +92,7 @@ impl Dungeon {
     pub fn compute_turn(&mut self) {
         let moved = self.floors.iter_mut().fold(None, |moved, floor| {
             if floor.has_players() {
-                let _ = floor.update_players(); //todo!() evantually return the dead players? idk
+                let _ = floor.update_players();
                 floor.update_entities();
             }
 

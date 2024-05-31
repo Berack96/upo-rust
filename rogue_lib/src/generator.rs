@@ -16,8 +16,6 @@ use std::{
     ops::Range,
 };
 
-// todo!() enemies vec configuration?
-
 /// Generatore del gioco che può creare dei piani del dungeon.
 /// Idealmente questo generatore si comporta come il pattern Factory.
 /// Per far si che funzioni ha bisongo di un seed per la generazione del piano
@@ -81,15 +79,18 @@ impl<'a> Generator<'a> {
         Floor::new(self.level, self.rng, entities, grid)
     }
 
-    /// todo!() docs
+    /// Permette di piazzare delle entità in modo casuale nell piano passato.\
+    /// Le entità verranno messe solamente sopra celle Empty e non sopvrapposte fra di loro.\
+    /// Alla fine verrà restituito un vettore contenente tutte le entità che dovrà poi essere associato
+    /// al piano in fase di creazione.
     fn rand_place_entities(&mut self, grid: &mut Vec<Vec<Cell>>) -> Vec<Entity> {
-        let entities = vec_filter(&self.config.entities, |e| {
+        let entities = ProbVec::new(&self.config.entities, |e| {
             e.floors.contains(&self.level).then(|| (e.priority, e))
         });
 
         let mut result: Vec<Entity> = vec![];
         for _ in 0..self.config.entities_total {
-            let config = vec_get_sample(&entities, &mut self.rng).clone();
+            let config = entities.sample(&mut self.rng).clone();
             let mut entity = Entity::new(
                 config.name.clone(),
                 config.health,
@@ -111,20 +112,19 @@ impl<'a> Generator<'a> {
     /// piazza gli effetti della confgurazione in modo casuale su tutto il piano.\
     /// essi vengono piazzati solamente sulle celle Empty
     fn rand_place_effects(&mut self, grid: &mut Vec<Vec<Cell>>) {
-        let effects = vec_filter(&self.config.effects, |e| {
+        let effects = ProbVec::new(&self.config.effects, |e| {
             e.floors.contains(&self.level).then(|| (e.priority, e))
         });
 
         for _ in 0..self.config.effects_total {
-            let effect = vec_get_sample(&effects, &mut self.rng).effect.clone();
+            let effect = effects.sample(&mut self.rng).effect.clone();
             let cell = Cell::Special(effect);
             let pos = self.rand_empty_cell_pos(grid, 0..self.size, 0..self.size);
             grid[pos.0][pos.1] = cell;
         }
     }
-    /// piazza una cella in un punto casuale del piano.\
-    /// il metodo contiuna a provare a piazzare la cella finche non trova una cella Empty.
-    /// todo!() docs
+    /// piazza una cella in un punto casuale tra i range inseriti.\
+    /// il metodo continua a provare a piazzare la cella finche non trova una cella Empty.
     fn rand_empty_cell_pos(
         &mut self,
         grid: &mut Vec<Vec<Cell>>,
@@ -141,27 +141,49 @@ impl<'a> Generator<'a> {
     }
 }
 
-/// crea una vista del vettore passato in input dopo aver applicato la funzione di filtro
-pub fn vec_filter<T, F>(original: &Vec<T>, filter: F) -> Vec<(f32, &T)>
-where
-    F: FnMut(&T) -> Option<(u32, &T)>,
-{
-    let temp = original.iter().filter_map(filter).collect::<Vec<_>>();
-    let max = temp.iter().fold(0, |a, b| a.max(b.0)) + 1;
-    let total = temp.iter().map(|(p, _)| (max - *p) as f32).sum::<f32>();
-    let mut accum = 0.0;
-    temp.into_iter()
-        .map(|(p, item)| {
-            accum += (max - p) as f32 / total;
-            (accum, item)
-        })
-        .collect()
+pub struct ProbVec<'a, T> {
+    prob: Vec<(f32, &'a T)>,
 }
 
-/// todo!() docs
-pub fn vec_get_sample<'a, T>(vec: &Vec<(f32, &'a T)>, rng: &mut impl Rng) -> &'a T {
-    let sample = rng.gen_range(0.0..1.0);
-    vec.iter().filter(|(p, _)| *p >= sample).next().unwrap().1
+impl<'a, T> ProbVec<'a, T> {
+    /// Crea una vista del vettore passato in input dopo aver applicato la funzione di filtro.\
+    /// Il vettore risultante avrà una tupla contenente l'elemento T e la sua probabilità
+    /// di essere scelto fra tutti gli elementi del vettore.\
+    /// Quindi la somma di tutte le probabilità sarà 1.0 (floating arithmetic permettendo).\
+    /// La funzione passata in input deve restituire un valore che più vicino a 0 è, maggiore la priorità
+    /// dell'elemento di essere selezionato.\
+    /// L'algoritmo poi penserà a trasformare le priorità in probabilità secondo questa logica:\
+    /// A, priorità 1 e B, priorità 2 => A, 0.66 e B, 0.33\
+    /// Ciò significa che A ha probabilità doppia rispetto a B di essere scelta.
+    pub fn new<F>(original: &'a Vec<T>, filter: F) -> Self
+    where
+        F: FnMut(&T) -> Option<(u32, &T)>,
+    {
+        let temp = original.iter().filter_map(filter).collect::<Vec<_>>();
+        let max = temp.iter().fold(0, |a, b| a.max(b.0)) + 1;
+        let total = temp.iter().map(|(p, _)| (max - *p) as f32).sum::<f32>();
+        let mut accum = 0.0;
+        let prob = temp
+            .into_iter()
+            .map(|(p, item)| {
+                accum += (max - p) as f32 / total;
+                (accum, item)
+            })
+            .collect();
+        Self { prob }
+    }
+
+    /// Dato un vettore generato secondo la funzione vec_filter, essa ne prende un valore casuale
+    /// utilizzando le probabilità interne del vettore.\
+    pub fn sample(&self, rng: &mut impl Rng) -> &'a T {
+        let sample = rng.gen_range(0.0..1.0);
+        self.prob
+            .iter()
+            .filter(|(p, _)| *p >= sample)
+            .next()
+            .unwrap()
+            .1
+    }
 }
 
 /// Utile per la generazione del labirinto.\
