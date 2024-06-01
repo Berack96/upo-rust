@@ -38,9 +38,7 @@ impl<T:Copy> DoublyPointedList<T> {
 }
 */
 use std::{
-    cell::{RefCell, RefMut},
-    fmt::Debug,
-    rc::Rc,
+    cell::{RefCell, RefMut}, fmt::Debug, mem, rc::Rc
 };
 
 type Pointer<T> = Option<Rc<RefCell<T>>>;
@@ -53,8 +51,8 @@ pub struct LinkedList<T: Copy> {
 
 struct Node<T: Copy> {
     element: T,
-    next: Pointer<Node<T>>,
-    prev: Pointer<Node<T>>,
+    next: Pointer<Self>,
+    prev: Pointer<Self>,
 }
 
 impl<T: Copy> Node<T> {
@@ -64,9 +62,6 @@ impl<T: Copy> Node<T> {
             next: None,
             prev: None,
         }
-    }
-    pub fn get(node: &Rc<RefCell<Node<T>>>) -> RefMut<Node<T>> {
-        node.as_ref().borrow_mut()
     }
     pub fn as_memref(self) -> Rc<RefCell<Node<T>>> {
         Rc::new(RefCell::new(self))
@@ -93,8 +88,8 @@ impl<T: Copy> LinkedList<T> {
     pub fn push_front(&mut self, element: T) {
         let element = Node::new(element).as_memref();
         if let Some(head) = self.head.take() {
-            Node::get(&head).prev = Some(element.clone());
-            Node::get(&element).next = Some(head);
+            head.borrow_mut().prev = Some(element.clone());
+            element.borrow_mut().next = Some(head);
         } else {
             self.tail = Some(element.clone());
         }
@@ -105,8 +100,8 @@ impl<T: Copy> LinkedList<T> {
     pub fn push_back(&mut self, element: T) {
         let element = Node::new(element).as_memref();
         if let Some(tail) = self.tail.take() {
-            Node::get(&tail).next = Some(element.clone());
-            Node::get(&element).prev = Some(tail);
+            tail.borrow_mut().next = Some(element.clone());
+            element.borrow_mut().prev = Some(tail);
         } else {
             self.head = Some(element.clone());
         }
@@ -116,47 +111,46 @@ impl<T: Copy> LinkedList<T> {
     }
 
     pub fn pop_front(&mut self) -> Option<T> {
-        if let Some(node) = self.head.take() {
-            let node = Node::get(&node);
-            self.head = node.next.clone();
-
-            match self.head.as_ref() {
-                Some(other) => Node::get(other).prev = None,
-                _ => self.tail = None,
-            }
-
-            self.size -= 1;
-            return Some(node.element);
-        }
-        None
+        self.remove(0)
     }
     pub fn pop_back(&mut self) -> Option<T> {
-        if let Some(node) = self.tail.take() {
-            let node = Node::get(&node);
-            self.tail = node.prev.clone();
+        self.remove(-1)
+    }
 
-            match self.tail.as_ref() {
-                Some(other) => Node::get(other).next = None,
-                _ => self.head = None,
+    fn remove(&mut self, n: i32) -> Option<T> {
+        let index = n + if n < 0 { self.size as i32 } else { 0 };
+        if let Some(node) = self.find(index) {
+            let node = node.borrow_mut();
+            let prev = node.prev.clone();
+            let next = node.next.clone();
+
+            match &prev {
+                Some(val) => val.borrow_mut().next = next.clone(),
+                None => self.head = next.clone(),
+            }
+            match &next {
+                Some(val) => val.borrow_mut().prev = prev.clone(),
+                None => self.tail = prev.clone(),
             }
 
             self.size -= 1;
-            return Some(node.element);
+            Some(node.element)
+        } else {
+            None
         }
-        None
     }
 
     pub fn get_front(&self) -> Option<T> {
-        self.head.clone().and_then(|h| Some(Node::get(&h).element))
+        self.head.clone().and_then(|h| Some(h.borrow_mut().element))
     }
     pub fn get_back(&self) -> Option<T> {
-        self.tail.clone().and_then(|t| Some(Node::get(&t).element))
+        self.tail.clone().and_then(|t| Some(t.borrow_mut().element))
     }
 
     pub fn get(&self, n: i32) -> Option<T> {
         let index = n + if n < 0 { self.size as i32 } else { 0 };
         if let Some(node) = self.find(index) {
-            Some(Node::get(&node).element)
+            Some(node.borrow_mut().element)
         } else {
             None
         }

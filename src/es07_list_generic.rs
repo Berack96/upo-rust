@@ -55,23 +55,20 @@ pub struct LinkedList<T> {
 
 #[derive(Debug)]
 struct Node<T> {
-    element: Option<T>,
-    next: Pointer<Node<T>>,
-    prev: Pointer<Node<T>>,
+    element: T,
+    next: Pointer<Self>,
+    prev: Pointer<Self>,
 }
 
 impl<T> Node<T> {
     pub fn new(element: T) -> Self {
         Self {
-            element: Some(element),
+            element,
             next: None,
             prev: None,
         }
     }
-    pub fn get(node: &Rc<RefCell<Node<T>>>) -> RefMut<Node<T>> {
-        node.as_ref().borrow_mut()
-    }
-    pub fn as_memref(self) -> Rc<RefCell<Node<T>>> {
+    pub fn as_memref(self) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(self))
     }
 }
@@ -96,8 +93,8 @@ impl<T> LinkedList<T> {
     pub fn push_front(&mut self, element: T) {
         let element = Node::new(element).as_memref();
         if let Some(head) = self.head.take() {
-            Node::get(&head).prev = Some(element.clone());
-            Node::get(&element).next = Some(head);
+            head.borrow_mut().prev = Some(element.clone());
+            element.borrow_mut().next = Some(head);
         } else {
             self.tail = Some(element.clone());
         }
@@ -108,8 +105,8 @@ impl<T> LinkedList<T> {
     pub fn push_back(&mut self, element: T) {
         let element = Node::new(element).as_memref();
         if let Some(tail) = self.tail.take() {
-            Node::get(&tail).next = Some(element.clone());
-            Node::get(&element).prev = Some(tail);
+            tail.borrow_mut().next = Some(element.clone());
+            element.borrow_mut().prev = Some(tail);
         } else {
             self.head = Some(element.clone());
         }
@@ -128,24 +125,22 @@ impl<T> LinkedList<T> {
     pub fn get(&mut self, n: i32) -> Option<T> {
         let index = n + if n < 0 { self.size as i32 } else { 0 };
         if let Some(node) = self.find(index) {
-            let mut node = Node::get(&node);
-            let prev = node.prev.clone();
-            let next = node.next.clone();
+            let temp = node.borrow_mut();
+            let prev = temp.prev.clone();
+            let next = temp.next.clone();
+            mem::drop(temp); // drop the borrow
 
             match &prev {
-                Some(val) => Node::get(val).next = next.clone(),
+                Some(val) => val.borrow_mut().next = next.clone(),
                 None => self.head = next.clone(),
             }
             match &next {
-                Some(val) => Node::get(val).prev = prev.clone(),
+                Some(val) => val.borrow_mut().prev = prev.clone(),
                 None => self.tail = prev.clone(),
             }
 
             self.size -= 1;
-            // Non avessi usato Option<T> avrei dovuto usare unsafe { mem::zeroed::<T>() }
-            // ma siccome ha problemi con possibili implementazioni di T (vedasi Drop trait)
-            // ho scelto la via più safe anche se può occupare un byte in più di memoria
-            mem::take(&mut node.element)
+            Some(Rc::try_unwrap(node).ok().unwrap().into_inner().element)
         } else {
             None
         }
