@@ -4,26 +4,33 @@ use esercizi::es06_list::LinkedList;
 fn test_front() {
     let mut list = LinkedList::new();
 
+    assert_eq!(0, list.len());
     assert_eq!(None, list.get_front());
     assert_eq!(None, list.pop_front());
     assert_eq!(None, list.get_front());
+    assert_eq!(0, list.len());
 
     list.push_front(50);
+    assert_eq!(1, list.len());
     assert_eq!(Some(50), list.get_front());
     assert_eq!(Some(50), list.pop_front());
     assert_eq!(None, list.get_front());
+    assert_eq!(0, list.len());
 
     list.push_front(50);
     list.push_front(20);
+    assert_eq!(2, list.len());
     assert_eq!(Some(20), list.get_front());
     assert_eq!(Some(20), list.pop_front());
     assert_eq!(Some(50), list.get_front());
     assert_eq!(Some(50), list.pop_front());
     assert_eq!(None, list.get_front());
+    assert_eq!(0, list.len());
 
     list.push_front(50);
     list.push_front(20);
     list.push_front(150);
+    assert_eq!(3, list.len());
     assert_eq!(Some(150), list.get_front());
     assert_eq!(Some(150), list.pop_front());
     assert_eq!(Some(20), list.get_front());
@@ -31,32 +38,40 @@ fn test_front() {
     assert_eq!(Some(50), list.get_front());
     assert_eq!(Some(50), list.pop_front());
     assert_eq!(None, list.get_front());
+    assert_eq!(0, list.len());
 }
 
 #[test]
 fn test_back() {
     let mut list = LinkedList::new();
 
+    assert_eq!(0, list.len());
     assert_eq!(None, list.get_back());
     assert_eq!(None, list.pop_back());
     assert_eq!(None, list.get_back());
+    assert_eq!(0, list.len());
 
     list.push_back(50);
+    assert_eq!(1, list.len());
     assert_eq!(Some(50), list.get_back());
     assert_eq!(Some(50), list.pop_back());
     assert_eq!(None, list.get_back());
+    assert_eq!(0, list.len());
 
     list.push_back(50);
     list.push_back(20);
+    assert_eq!(2, list.len());
     assert_eq!(Some(20), list.get_back());
     assert_eq!(Some(20), list.pop_back());
     assert_eq!(Some(50), list.get_back());
     assert_eq!(Some(50), list.pop_back());
     assert_eq!(None, list.get_back());
+    assert_eq!(0, list.len());
 
     list.push_back(50);
     list.push_back(20);
     list.push_back(150);
+    assert_eq!(3, list.len());
     assert_eq!(Some(150), list.get_back());
     assert_eq!(Some(150), list.pop_back());
     assert_eq!(Some(20), list.get_back());
@@ -64,6 +79,7 @@ fn test_back() {
     assert_eq!(Some(50), list.get_back());
     assert_eq!(Some(50), list.pop_back());
     assert_eq!(None, list.get_back());
+    assert_eq!(0, list.len());
 }
 
 #[test]

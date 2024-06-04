@@ -15,8 +15,8 @@ fn test_front() {
     assert_eq!(false, list.is_empty());
     assert_eq!(Some(50), list.pop_front());
     assert_eq!(true, list.is_empty());
-    assert_eq!(0, list.len());
     assert_eq!(None, list.pop_front());
+    assert_eq!(0, list.len());
 
     list.push_front(50);
     list.push_front(20);
@@ -25,6 +25,7 @@ fn test_front() {
     assert_eq!(Some(20), list.pop_front());
     assert_eq!(Some(50), list.pop_front());
     assert_eq!(None, list.pop_front());
+    assert_eq!(0, list.len());
 
     list.push_front(50);
     list.push_front(20);
@@ -35,6 +36,7 @@ fn test_front() {
     assert_eq!(Some(20), list.pop_front());
     assert_eq!(Some(50), list.pop_front());
     assert_eq!(None, list.pop_front());
+    assert_eq!(0, list.len());
 }
 
 #[test]
@@ -52,8 +54,8 @@ fn test_back() {
     assert_eq!(false, list.is_empty());
     assert_eq!(Some(50), list.pop_back());
     assert_eq!(true, list.is_empty());
-    assert_eq!(0, list.len());
     assert_eq!(None, list.pop_back());
+    assert_eq!(0, list.len());
 
     list.push_back(50);
     list.push_back(20);
@@ -62,6 +64,7 @@ fn test_back() {
     assert_eq!(Some(20), list.pop_back());
     assert_eq!(Some(50), list.pop_back());
     assert_eq!(None, list.pop_back());
+    assert_eq!(0, list.len());
 
     list.push_back(50);
     list.push_back(20);
@@ -72,6 +75,7 @@ fn test_back() {
     assert_eq!(Some(20), list.pop_back());
     assert_eq!(Some(50), list.pop_back());
     assert_eq!(None, list.pop_back());
+    assert_eq!(0, list.len());
 }
 
 #[test]
