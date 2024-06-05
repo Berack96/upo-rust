@@ -37,23 +37,16 @@ impl<T> DoublyPointedList<T> {
     pub fn get(& self, n:i32) -> Option<T>
 }
 */
-use std::{
-    borrow::Borrow,
-    cell::{RefCell, RefMut},
-    mem,
-    rc::Rc,
-};
+use std::{cell::RefCell, mem, rc::Rc};
 
 type Pointer<T> = Option<Rc<RefCell<T>>>;
 
-#[derive(Debug)]
 pub struct LinkedList<T> {
     size: usize,
     head: Pointer<Node<T>>,
     tail: Pointer<Node<T>>,
 }
 
-#[derive(Debug)]
 struct Node<T> {
     element: T,
     next: Pointer<Self>,

@@ -4,6 +4,7 @@ use rand::{Rng, SeedableRng};
 use rand_pcg::Pcg32;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
+    fmt::Debug,
     rc::Rc,
     sync::{
         mpsc::{self, Receiver, Sender},
@@ -35,13 +36,19 @@ use std::{
  * cifra e’ statto venduto e a quale partecipante e’ stato assegnato.
  * I partecipanti leggono questa informazione.
  */
+
+/// Struttura che indica un prodotto da bandire all'asta.\
+/// Il Prodotto ha un nome, un prezzo di partenza e una riserva che se non
+/// raggiunta implica il fallimento dell'asta per questo oggeto.
 #[derive(Clone, Debug)]
 pub struct Product {
-    name: String,
-    price: f32,
-    reserve: f32,
+    pub name: String,
+    pub price: f32,
+    pub reserve: f32,
 }
 
+/// Richieste che vengono inviate dal Banditore a tutti i Partecipanti.\
+/// Possono essere di vario tipo e indicano un cambiamento di stato dell'asta corrente.
 #[derive(Clone, Debug)]
 enum AuctionRequest {
     AuctionStart(String, f32),
@@ -52,6 +59,8 @@ enum AuctionRequest {
     Stop,
 }
 
+/// Risposte che vengono inviate dai Partecipanti dell'asta al Banditore.\
+/// Qui si può indicare solamente se si vuole continuare o meno all'asta.
 #[derive(Clone, Debug)]
 enum AuctionResponse {
     NotInterested(String),
@@ -63,30 +72,55 @@ type ReciveRequest = Receiver<AuctionRequest>;
 type SendResponse = Sender<AuctionResponse>;
 type ReciveResponse = Receiver<AuctionResponse>;
 
+/// Asta che comprende più prodotti.\
+/// La creazione di un'asta avrà sempre un Banditore, ma per i partecipandi bisogna
+/// utilizzare l'apposita funzione per l'aggiunta.
+#[derive(Debug)]
+pub struct Auction {
+    auctioneer: Auctioneer,
+    participants: Vec<Participant>,
+    sender: SendResponse,
+}
+
+/// Banditore di un'asta che modera i partecipanti, li aggiorna sul cambiamento del prezzo
+/// e alla fine decide il vincitore del'asta nel caso in cui non ci siano altri partecipanti.
 #[derive(Debug)]
 struct Auctioneer {
     products: VecDeque<Product>,
     currents: HashSet<String>,
     participants: HashMap<String, SendRequest>,
     recive: ReciveResponse,
+    log: bool,
 }
 
+/// Partecipante ad un'asta che ha un tot di soldi a disposizione.\
+/// Ogni partecipante deve avere una strategia che permette di scegliere cosa fare nel caso
+/// in cui il prezzo di un oggetto aumenta.
 #[derive(Debug)]
 struct Participant {
     name: String,
     money: f32,
-    rng: Arc<Mutex<Pcg32>>,
+    strategy: Box<dyn Strategy>,
     products_won: Vec<Product>,
     sender: SendResponse,
     recive: ReciveRequest,
 }
 
-#[derive(Debug)]
-pub struct Auction {
-    auctioneer: Auctioneer,
-    participants: Vec<Participant>,
-    sender: SendResponse,
-    rng: Arc<Mutex<Pcg32>>,
+/// Trait che indica una possibile Strategia per un partecipante.\
+/// Il trait è stato introdotto nel caso in cui si voglia modificare il comportamento di un partecipante.
+/// Per essere implementeto il trait ha bisogno di una sola funzione, dato che la funzione di
+/// start_auction può essere ignorata.
+pub trait Strategy: Send + Debug {
+    /// Funzione utilizzata per poter indicare alla strategia che è iniziata una nuova asta.\
+    /// Questo è utile nel caso in cui si voglia creare una strategia che tenga conto dello
+    /// stato in cui si trova l'asta.\
+    /// Nel caso in cui interessa fare solo una strategia stateless allora si può ignorare questa funzione.
+    fn start_auction(&mut self, product: String) {}
+    /// Questa funzione ritorna un nuovo valore nel caso in cui, per la strategia, si voglia continuare
+    /// a provare a vincere l'asta.\
+    /// Nel caso in cui ci si voglia ritirare, allora il valore di ritorno dovrà essere None.
+    /// Nel caso in cui il valore di ritorno supera total_money allora si verrà ritirati dall'asta.
+    fn updated_price(&mut self, total_money: f32, price: f32) -> Option<f32>;
 }
 
 impl Product {
@@ -100,27 +134,38 @@ impl Product {
 }
 
 impl Participant {
-    pub fn auction_loop(&mut self) {
+    /// Funzione utilizzata per il loop dell'asta e che deve essere fatta partire
+    /// PRIMA di aver fatto partire il loop per il banditore.\
+    /// Questo perchè altrimenti si può incorrere in problemi quali il partecipante
+    /// non abilitato all'asta.
+    pub fn auction_loop(&mut self, log: bool) {
         while let Ok(result) = self.recive.recv() {
             match result {
-                AuctionRequest::AuctionStart(_, price) => self.updated_price(price),
+                AuctionRequest::AuctionStart(product, price) => {
+                    self.strategy.start_auction(product);
+                    self.updated_price(price)
+                }
+                AuctionRequest::AuctionOver(prod) => {
+                    if log {
+                        println!(
+                            "Participant {:?} money:{:?}, won: {:?}",
+                            self.name, self.money, self.products_won
+                        )
+                    }
+                }
                 AuctionRequest::UpdatedPrice(price) => self.updated_price(price),
                 AuctionRequest::YouAreWinning(price) => self.winning_for(price),
                 AuctionRequest::YouWon(prod) => self.won_product(prod),
-                AuctionRequest::AuctionOver(prod) => println!(
-                    "Participant {:?} money:{:?}, won: {:?}",
-                    self.name, self.money, self.products_won
-                ),
                 AuctionRequest::Stop => return,
             }
         }
     }
 
-    fn updated_price(&self, price: f32) {
+    fn updated_price(&mut self, price: f32) {
         let name = self.name.clone();
-        let response = if price <= self.money {
-            let up = self.rng.lock().unwrap().gen_range(price..self.money);
-            AuctionResponse::WantForPrice(name, up)
+        let up_price = self.strategy.updated_price(self.money, price);
+        let response = if matches!(up_price, Some(up) if up <= self.money) {
+            AuctionResponse::WantForPrice(name, up_price.unwrap())
         } else {
             AuctionResponse::NotInterested(name)
         };
@@ -138,7 +183,12 @@ impl Participant {
 }
 
 impl Auctioneer {
-    pub fn auction_loop(&mut self) {
+    /// Funzione utilizzata per il loop dell'asta e che deve essere fatta partire
+    /// DOPO aver fatto partire tutti i loop dei partecipanti su dei thread diversi da questo.\
+    /// Questo per evitare che si possano avere situazioni di deadlock o semplicemente problemi
+    /// nella comunicazione con i thread dei partecipanti.
+    pub fn auction_loop(&mut self) -> VecDeque<(Product, Option<String>)> {
+        let mut results = VecDeque::new();
         while let Some(mut product) = self.products.pop_front() {
             self.new_product(product.name.clone(), product.price);
             let mut winner = None;
@@ -163,10 +213,12 @@ impl Auctioneer {
                 winner = None
             }
 
+            results.push_back((product.clone(), winner.clone()));
             self.end_product(winner, product);
         }
 
         self.end_auction();
+        results
     }
 
     fn new_product(&mut self, name: String, price: f32) {
@@ -208,7 +260,10 @@ impl Auctioneer {
     fn recive(&mut self) -> Option<(String, f32)> {
         match self.recive.recv() {
             Ok(response) => {
-                println!("Response -> {:?}", response);
+                if self.log {
+                    println!("Response -> {:?}", response)
+                };
+
                 match response {
                     AuctionResponse::NotInterested(name) => {
                         self.currents.remove(&name);
@@ -235,36 +290,48 @@ impl Auctioneer {
     }
     fn send_only(&self, recipient: &String, message: AuctionRequest) {
         if let Some(channel) = self.participants.get(recipient) {
-            println!("Sending to {:?} -> {:?}", recipient, message);
+            if self.log {
+                println!("Sending to {:?} -> {:?}", recipient, message)
+            };
+
             channel.send(message);
         }
     }
 }
 
 impl Auction {
-    pub fn new(products: VecDeque<Product>, seed: u64) -> Self {
+    /// Crea un'asta con i prodotti inseriti.\
+    /// Nel caso in cui ci siano due prodotti con lo stesso nome allora verrà fatto partire un PANIC.
+    pub fn new(products: VecDeque<Product>) -> Self {
         let channel_participant = mpsc::channel();
         let auctioneer = Auctioneer {
             products,
             currents: HashSet::new(),
             participants: HashMap::new(),
             recive: channel_participant.1,
+            log: false,
         };
 
         Self {
             auctioneer,
-            rng: Arc::new(Mutex::new(Pcg32::seed_from_u64(seed))),
             participants: vec![],
             sender: channel_participant.0,
         }
     }
 
-    pub fn add_participant(&mut self, name: String, money: f32) {
+    /// Abilita la possibilità di vedere lo scambio dei messaggi tra il banditore d'asta e i vari partecipanti
+    pub fn enable_log(&mut self) {
+        self.auctioneer.log = true
+    }
+
+    /// Aggiunge un partecipante all'asta.\
+    /// Il partecipante deve avere un nome univoco rispetto agli altri altrimenti verrà segnalato con un PANIC
+    pub fn add_participant(&mut self, name: String, money: f32, strategy: Box<dyn Strategy>) {
         let channel = mpsc::channel();
         let participant = Participant {
             name: name.clone(),
             money,
-            rng: self.rng.clone(),
+            strategy,
             products_won: vec![],
             sender: self.sender.clone(),
             recive: channel.1,
@@ -274,22 +341,16 @@ impl Auction {
         self.participants.push(participant);
     }
 
-    pub fn start(mut self) {
-        while let Some(participant) = self.participants.pop() {
-            Self::start_participant(participant);
+    /// Inizia l'asta e consuma la struttura.\
+    /// Ogni partecipante avrà il proprio thread che verrà fatto partire PRIMA del banditore d'asta.\
+    /// Alla fine dell'asta si riceverà in output un vettore con tutti i prodotti e il vincitore nel caso ci sia.\
+    /// Questa chiamata è bloccante, ovvero aspetta finchè l'asta non sarà finita.
+    pub fn start(mut self) -> VecDeque<(Product, Option<String>)> {
+        while let Some(mut participant) = self.participants.pop() {
+            let log = self.auctioneer.log;
+            thread::spawn(move || participant.auction_loop(log));
         }
-        Self::start_auctioneer(self.auctioneer);
-    }
 
-    fn start_participant(participant: Participant) {
-        thread::spawn(|| {
-            let mut part = participant;
-            part.auction_loop();
-        });
-    }
-
-    fn start_auctioneer(auctioneer: Auctioneer) {
-        let mut auct = auctioneer;
-        auct.auction_loop();
+        self.auctioneer.auction_loop()
     }
 }

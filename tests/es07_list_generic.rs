@@ -158,9 +158,9 @@ fn test_get() {
     assert_eq!(Some(20), list.get(1));
     // [50, 30, 40]
     assert_eq!(Some(30), list.get(1));
-    // [30, 40]
+    // [50, 40]
     assert_eq!(Some(40), list.get(1));
-    // [30]
+    // [50]
     assert_eq!(Some(50), list.get(0));
     // []
     assert_eq!(None, list.get(0));

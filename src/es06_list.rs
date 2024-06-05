@@ -38,7 +38,8 @@ impl<T:Copy> DoublyPointedList<T> {
 }
 */
 use std::{
-    cell::{RefCell, RefMut}, fmt::Debug, mem, rc::Rc
+    cell::RefCell,
+    rc::Rc,
 };
 
 type Pointer<T> = Option<Rc<RefCell<T>>>;
