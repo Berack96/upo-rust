@@ -56,7 +56,6 @@ pub fn run_console(player: String, seed: u64) {
     game.add_player(player, Box::new(ConsoleInput));
 
     while game.has_players() {
-        let _ = game.save("save.json");
         game.compute_turn();
     }
 }
@@ -174,7 +173,7 @@ impl Behavior for ConsoleInput {
         self.print_floor(floor, "".to_string());
     }
     fn on_death(&mut self, floor: FloorView) {
-        self.print_floor(floor, "YOU DIED!".to_string());
+        self.print_floor(floor, format!("{}YOU DIED!{}\n", COLOR_ENEMY, COLOR_RESET));
     }
     fn get_next_action(&mut self, entity: &Entity) -> Option<Action> {
         let prompt = "Insert your action [? for help]: ";
@@ -190,17 +189,17 @@ impl Behavior for ConsoleInput {
                     'a' => return Some(Action::Move(Direction::Left)),
                     's' => return Some(Action::Move(Direction::Down)),
                     'd' => return Some(Action::Move(Direction::Right)),
-                    'q' => return None,
+                    'q' => {
+                        let _ = term.write_line("");
+                        return None;
+                    }
                     '?' => {
                         let _ = term.write_line("");
-                        let _ = term.write_line("[wasd]  => for movement");
-                        let _ = term.write_line("[space] => for attacking the enemy in front");
-                        let _ = term.write_line("[z]     => for doing nothing");
-                        let _ = term.write_line("[q]     => for exit the game");
-                        let _ = term.write("Press ANY button to continue...".as_bytes());
+                        let (message, lines) = get_help_message();
+                        let _ = term.write(message.as_bytes());
                         let _ = term.read_char(); // waiting for user acknowledgment
                         let _ = term.clear_line(); // clear line "press button..."
-                        let _ = term.clear_last_lines(4); // this number is from the previous message (4 total lines of help)
+                        let _ = term.clear_last_lines(lines); // this number is from the message
                         let _ = term.move_cursor_up(1); // moving up since the first write_line put me down by one
                         let _ = term.move_cursor_right(prompt.len()); // moving at the end of the prompt
                     }
@@ -209,4 +208,28 @@ impl Behavior for ConsoleInput {
             }
         }
     }
+}
+
+fn get_help_message() -> (String, usize) {
+    let help_message = vec![
+        format!(
+            "{}Objective{}: survive and reach the next floor through {}",
+            COLOR_PLAYER_HEALTH,
+            COLOR_RESET,
+            Cell::Exit.as_char()
+        ),
+        format!(
+            "Special effect cell are colored with {}█{}",
+            COLOR_EFFECT, COLOR_RESET
+        ),
+        "[wasd]  => for movement".to_string(),
+        "[space] => for attacking the enemy in front".to_string(),
+        "[z]     => for doing nothing".to_string(),
+        "[q]     => for exit the game".to_string(),
+        "Press ANY button to continue...".to_string(),
+    ];
+
+    let count = help_message.len() - 1; // the last one doesn't have the newline
+    let string = help_message.join("\n");
+    (string, count)
 }
